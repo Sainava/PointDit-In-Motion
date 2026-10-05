@@ -1,0 +1,5 @@
+A. fr1 ground truth lags the image slightly. fr1 depth frames are up to ~20 ms away from their RGB frames. During fast motion, the GT depth is then slightly misaligned with the image. That's a GT error, not a model error, and it happens exactly on the fast frames you'll study for motion blur. So in Week 2, blur and GT misalignment are confounded. The fix then: also report blur results restricted to frames with a small depth-RGB offset (e.g. < 5 ms), and keep the offset as a column in the per-frame CSV.
+
+B. Kept frames have holes. Dropped frames mean consecutive kept frames are sometimes 64–100 ms apart instead of ~33 ms. For Week 3's consistency metric, define frame gaps by time (or by the original rgb.txt index), not by position in the kept list. When choosing ~300-frame windows in subtask 4, prefer stretches with few holes.
+
+The fr1_360 trajectory length (6.64 m against TUM's ~5.8 m) is most likely ground-truth jitter on a mostly rotational path.
