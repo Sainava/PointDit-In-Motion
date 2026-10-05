@@ -6,3 +6,5 @@ __pycache__/
 /reference
 /data
 .DS_Store
+.venv/
+outputs/

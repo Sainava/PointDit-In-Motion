@@ -1,0 +1,20 @@
+# TUM intrinsics; no undistortion is applied anywhere.
+cameras:
+  # ROS defaults, recommended by TUM for the pre-registered freiburg1 images.
+  ros_default: {fx: 525.0, fy: 525.0, cx: 319.5, cy: 239.5}
+  # freiburg3 images are already undistorted.
+  freiburg3: {fx: 535.4, fy: 539.2, cx: 320.1, cy: 247.6}
+
+sequences:
+  rgbd_dataset_freiburg1_desk:
+    camera: ros_default
+    window: {start: null, count: null}
+  rgbd_dataset_freiburg1_room:
+    camera: ros_default
+    window: {start: null, count: null}
+  rgbd_dataset_freiburg1_360:
+    camera: ros_default
+    window: {start: null, count: null}
+  rgbd_dataset_freiburg3_long_office_household:
+    camera: freiburg3
+    window: {start: null, count: null}
