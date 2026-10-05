@@ -6,6 +6,7 @@ import gc
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import torch
@@ -23,6 +24,8 @@ DEMO_L_512_ARGS = [
     "--img_size", "512",
     "--num_sampling_steps", "3",
 ]
+
+SamplerInit = Literal["noise", "zeros"]
 
 
 @dataclass(frozen=True)
@@ -69,8 +72,12 @@ class PointDiTRunner:
         self.model = _load_model(self.args, Path(checkpoint), Path(dinov3_weights), self.device)
 
     @torch.no_grad()
-    def predict(self, image: np.ndarray) -> PredictionResult:
+    def predict(
+        self, image: np.ndarray, init: SamplerInit = "zeros", seed: int | None = None
+    ) -> PredictionResult:
         _check_image(image)
+        # Denoiser.generate starts from generate_noise_scale * randn; upstream's 0.0 is zeros.
+        self.model.args.generate_noise_scale = _noise_scale(init, self.args.noise_scale)
         height, width = image.shape[:2]
 
         torch.cuda.reset_peak_memory_stats(self.device)
@@ -83,6 +90,8 @@ class PointDiTRunner:
         if inference_size != (height, width):
             pixels = F.interpolate(pixels, size=inference_size, mode="bilinear", align_corners=False)
 
+        if seed is not None:
+            torch.manual_seed(seed)
         torch.cuda.synchronize(self.device)
         model_start = time.perf_counter()
         with torch.amp.autocast("cuda", dtype=torch.bfloat16):
@@ -125,6 +134,14 @@ class PointDiTRunner:
             return torch.zeros_like(points[:, 0], dtype=torch.bool)
         metric = points[:, 2] if self.args.remove_sky_metric == "depth" else points.norm(dim=1)
         return metric > self.args.remove_sky_threshold
+
+
+def _noise_scale(init: SamplerInit, training_noise_scale: float) -> float:
+    if init == "zeros":
+        return 0.0
+    if init == "noise":
+        return training_noise_scale
+    raise ValueError(f"init must be 'noise' or 'zeros', got {init!r}")
 
 
 def _check_image(image: np.ndarray) -> None:
