@@ -1,0 +1,6 @@
+{
+    "sequence": "rgbd_dataset_freiburg1_desk",
+    "frame": "rgb/<filename of the first frame>.png",
+    "fork_commit": "664736a",
+    "settings": "upstream defaults (3 steps, bf16, default token budget)"
+}
