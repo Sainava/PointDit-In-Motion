@@ -44,4 +44,4 @@ def read_rgb_list(sequence: Path) -> list[RgbFrame]:
 def load_rgb(path: Path) -> np.ndarray:
     """An HxWx3 uint8 RGB image."""
     with Image.open(path) as image:
-        return np.asarray(image.convert("RGB"), dtype=np.uint8)
+        return np.array(image.convert("RGB"), dtype=np.uint8)
