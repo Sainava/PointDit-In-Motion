@@ -47,3 +47,12 @@ The dataset score is the plain mean of the per-image values, ×100 (engine.py:79
 ***TUM frames are evaluated at full 640×480 rather than the benchmark's resize-and-crop to 512, so your numbers are not directly comparable to the paper's tables.***
 
 ***fr3's 5 single-frame holes are fine; it simply has no clean 300-frame stretch.***
+
+
+***Remember***
+One thing to note: latency
+
+Mean latency is 1,674–1,844 ms, about 25–40% above the ~1,330 ms from your single-process runs. Two causes are likely, and they don't affect accuracy:
+
+CPU contention: two processes share Kaggle's 4 CPU cores for image loading, preprocessing and compressing the outputs, and part of that sits inside the timed region.
+T4 clock throttling: T4s slow down under sustained load, and here two ran flat out for 20 minutes.
