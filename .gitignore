@@ -3,3 +3,8 @@ weights/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+/reference
+/data
+.DS_Store
+.venv/
+outputs/

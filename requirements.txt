@@ -1,6 +1,7 @@
 numpy>=1.26.0
 Pillow>=10.0.0
 matplotlib>=3.9.0
+PyYAML>=6.0
 # used by the fork's DINOv3 download and conversion step
 huggingface_hub
 safetensors

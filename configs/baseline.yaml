@@ -1,0 +1,4 @@
+name: baseline
+inference:
+  init: zeros
+  seed: null

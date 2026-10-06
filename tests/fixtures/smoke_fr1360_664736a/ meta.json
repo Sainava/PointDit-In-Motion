@@ -1,0 +1,6 @@
+{
+    "sequence": "rgbd_dataset_freiburg1_360",
+    "frame": "rgb/1305031790.645155.png",
+    "fork_commit": "664736a",
+    "settings": "upstream defaults (3 steps, bf16, default token budget, zero init)"
+}
