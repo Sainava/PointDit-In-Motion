@@ -8,13 +8,13 @@ cameras:
 sequences:
   rgbd_dataset_freiburg1_desk:
     camera: ros_default
-    window: {start: null, count: null}
+    window: {start: 209, count: 300}
   rgbd_dataset_freiburg1_room:
     camera: ros_default
-    window: {start: null, count: null}
+    window: {start: 366, count: 300}
   rgbd_dataset_freiburg1_360:
     camera: ros_default
-    window: {start: null, count: null}
+    window: {start: 0, count: 300}
   rgbd_dataset_freiburg3_long_office_household:
     camera: freiburg3
-    window: {start: null, count: null}
+    window: {start: 637, count: 300}

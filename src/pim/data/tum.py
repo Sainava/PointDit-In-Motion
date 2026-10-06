@@ -240,6 +240,23 @@ def build_frames(
     return frames
 
 
+def apply_window(sequence: TUMSequence) -> list[Frame]:
+    """The frames of `sequence.window`, or all frames if start and count are both null."""
+    start, count = sequence.window.start, sequence.window.count
+    if start is None and count is None:
+        return list(sequence.frames)
+    if start is None or count is None:
+        raise ValueError(f"{sequence.name}: window needs both start and count or neither, "
+                         f"got start={start}, count={count}")
+    for key, value in (("start", start), ("count", count)):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"{sequence.name}: window {key} must be an integer, got {value!r}")
+    if start < 0 or count < 1 or start + count > len(sequence.frames):
+        raise ValueError(f"{sequence.name}: window start={start}, count={count} does not fit "
+                         f"in {len(sequence.frames)} frames")
+    return sequence.frames[start:start + count]
+
+
 def load_sequence(root: Path, config_path: Path) -> TUMSequence:
     root = Path(root).resolve()
     if not root.is_dir():

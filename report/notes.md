@@ -45,3 +45,5 @@ Metrics (metrics/metrics.py), each averaged over the masked pixels of one image:
 The dataset score is the plain mean of the per-image values, ×100 (engine.py:790-796, :1477-1483).
 
 ***TUM frames are evaluated at full 640×480 rather than the benchmark's resize-and-crop to 512, so your numbers are not directly comparable to the paper's tables.***
+
+***fr3's 5 single-frame holes are fine; it simply has no clean 300-frame stretch.***
