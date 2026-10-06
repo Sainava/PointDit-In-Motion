@@ -23,7 +23,7 @@ fr3 has no hole-free 300-frame stretch; its 5 holes are single dropped frames (6
 | Component | Commit |
 |---|---|
 | Project (predictions) | `5959d67` |
-| Project (evaluation) | `<eval commit>` |
+| Project (evaluation) | `584cd16` |
 | PointDiT fork (Sainava/Sai-pointdit) | `664736a` |
 | DINOv3 code | `6876159` |
 
