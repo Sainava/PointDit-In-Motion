@@ -1,58 +1,75 @@
-A. fr1 ground truth lags the image slightly. fr1 depth frames are up to ~20 ms away from their RGB frames. During fast motion, the GT depth is then slightly misaligned with the image. That's a GT error, not a model error, and it happens exactly on the fast frames you'll study for motion blur. So in Week 2, blur and GT misalignment are confounded. The fix then: also report blur results restricted to frames with a small depth-RGB offset (e.g. < 5 ms), and keep the offset as a column in the per-frame CSV.
+# Notes: data, protocol and caveats
 
-B. Kept frames have holes. Dropped frames mean consecutive kept frames are sometimes 64–100 ms apart instead of ~33 ms. For Week 3's consistency metric, define frame gaps by time (or by the original rgb.txt index), not by position in the kept list. When choosing ~300-frame windows in subtask 4, prefer stretches with few holes.
+Running reference of facts and caveats that affect how results are produced and interpreted. Results themselves are in `report/data_metrics.md`.
 
-The fr1_360 trajectory length (6.64 m against TUM's ~5.8 m) is most likely ground-truth jitter on a mostly rotational path.
+## TUM RGB-D data
 
-Evaluation protocol (upstream, fork 664736a)
-(How upstream evaluates (fork at 664736a))
+### fr1 depth lags the RGB image
+fr1 depth frames are paired with RGB frames up to ~20 ms apart (mean 7–11 ms); fr3 is essentially synchronised (~0.1 ms). During fast motion, fr1 GT depth is therefore slightly misaligned with the image. This is a GT error, not a model error, and it occurs on exactly the fast frames used to study motion blur, so **blur and GT misalignment are confounded on fr1**.
+- Keep `depth_offset_ms` as a per-frame column (done in `per_frame.csv`).
+- Report blur results also restricted to frames with a small offset (e.g. < 5 ms).
 
-Preprocessing (dataloader/eval_depth.py, wired up in main.py:569-596):
-- Image: the shortest side is resized to 512 (PIL bilinear) and the image is centre-cropped to 512×512, with intrinsics adjusted (:222-272). GT depth is resized with nearest-neighbour.
-- GT depth is decoded from MoGe's log-encoded PNG (:34-72): 0 becomes NaN, 65535 becomes inf.
-- GT points come from depth_to_pointmap (:75-108): X = (u−cx)z/fx, with u the column and no +0.5 offset.
-- GT mask is isfinite(depth) only (:281). There are no depth range limits.
+### Dropped frames ("holes")
+Association drops RGB frames without a depth frame within 20 ms, so consecutive kept frames are sometimes 64–100 ms apart instead of ~33 ms.
+- Consistency metrics (Week 3) must define frame gaps by **time** (or original `rgb.txt` index), never by position in the kept-frame list.
+- Windows were chosen as the 300-frame stretch with the fewest holes. fr1 windows have none; fr3 has no hole-free stretch, and its window has 5 single-frame holes (61–68 ms vs a 32 ms median), which is acceptable.
 
-Inference (engine.py):
-- --eval_num_tokens defaults to 0 (main.py:301), so a 512×512 input is never resized (engine.py:498-534).
-- Then generate runs under bf16 autocast, followed by .float() (:687-708). There is no resize back.
+### Intrinsics confound (fr1 vs fr3)
+fr1 uses TUM's approximate ROS-default intrinsics (TUM's recommendation for its pre-registered depth); fr3 uses calibrated intrinsics. fr1 GT point maps are therefore slightly distorted, which inflates Rel_p more than Rel_d (Rel_p − Rel_d ≈ 2.1 on fr1_room vs ≈ 1.0 on fr3).
+- **Use Rel_d for fr1 vs fr3 comparisons.**
+
+### Ground-truth properties
+- Invalid GT pixels (depth 0) are excluded from all metrics. They reduce coverage but **cannot add error**, so GT holes never explain a high-error frame.
+- Kinect artefacts visible in GT point clouds: occlusion shadows (missing depth next to object edges) and depth quantisation that grows with distance (layered far surfaces). Both limit fine-detail comparison at edges and at range.
+- fr1_360 trajectory length is 6.64 m vs TUM's published ~5.8 m, most likely ground-truth jitter accumulating on a mostly rotational path. Not investigated further.
+
+## Evaluation protocol
+
+### Upstream (fork `664736a`)
+Preprocessing (`dataloader/eval_depth.py`, wired in `main.py:569-596`):
+- Shortest side resized to 512 (PIL bilinear), centre crop 512×512, intrinsics adjusted (`:222-272`). GT depth resized with nearest-neighbour.
+- GT depth decoded from MoGe's log-encoded PNG (`:34-72`): 0 → NaN, 65535 → inf.
+- GT points from `depth_to_pointmap` (`:75-108`): X = (u − cx) z / fx, u = column index, no +0.5 offset.
+- GT mask is `isfinite(depth)` only (`:281`); no depth range limits.
+
+Inference (`engine.py`):
+- `--eval_num_tokens` defaults to 0 (`main.py:301`), so a 512×512 input is not resized (`engine.py:498-534`).
+- Generation under bf16 autocast, then `.float()` (`:687-708`); no resize back.
 
 Masks:
-- Sky removal is computed (engine.py:729-735) but never applied to the metrics. Only the GT mask goes into compute_metrics (:775-783), and the flag's help text confirms it (main.py:316-323).
-- Images with fewer than 100 valid GT pixels are skipped (:765-773).
+- Sky removal is computed (`engine.py:729-735`) but never applied to metrics; only the GT mask reaches `compute_metrics` (`:775-783`, confirmed by the flag's help text, `main.py:316-323`).
+- Images with fewer than 100 valid GT pixels are skipped (`:765-773`).
 
-Alignment (metrics/compute_metrics.py:86): this is the entry point. The fit is solved on at most 64×64 pixels, picked by masked_nearest_resize (:121, masked_resize.py:29), and then applied to the full image.
-- Points are fitted with one scale plus a 3D shift: align_points_scale_xyz_shift (alignment.py:320-370), called at compute_metrics.py:286-288.
-  - Objective: weighted L1, Σᵢ wᵢ‖s·pᵢ + t − gᵢ‖₁ with wᵢ = 1/‖gᵢ‖.
-  - It is solved exactly, not iteratively. For each candidate anchor pixel, the shift makes that pixel match and a weighted median gives the scale (align, :67-97); the anchor with the lowest loss wins. The max_iters/eps arguments are never used.
-- Depth has its own, separate alignment: scale plus shift on the predicted z, using align_depth_affine (alignment.py:178-229) with weights 1/g_depth and the same exact L1 method (compute_metrics.py:174-176).
+Alignment (entry point `metrics/compute_metrics.py:86`), fitted on at most 64×64 pixels sampled by `masked_nearest_resize` (`:121`, `masked_resize.py:29`) and applied to the full image:
+- **Points:** one scale + 3D shift, `align_points_scale_xyz_shift` (`alignment.py:320-370`, called at `compute_metrics.py:286-288`). Weighted L1 objective Σᵢ wᵢ‖s·pᵢ + t − gᵢ‖₁ with wᵢ = 1/‖gᵢ‖, solved exactly: for each candidate anchor pixel the shift makes that pixel match and a weighted median gives the scale (`align`, `:67-97`); the lowest-loss anchor wins. `max_iters`/`eps` are unused.
+- **Depth:** separate scale + shift on predicted z, `align_depth_affine` (`alignment.py:178-229`), weights 1/g, same exact L1 method (`compute_metrics.py:174-176`).
 
-Metrics (metrics/metrics.py), each averaged over the masked pixels of one image:
+Metrics (`metrics/metrics.py`), averaged over each image's masked pixels:
 
-┌────────┬────────────────────────────────────────────────────────────────────────┬────────┐
-│ Metric │                               Definition                               │ Lines  │
-├────────┼────────────────────────────────────────────────────────────────────────┼────────┤
-│ Rel_p  │ mean(‖p−g‖ / (‖g‖+1e-6))                                               │ :30-34 │
-├────────┼────────────────────────────────────────────────────────────────────────┼────────┤
-│ δ1_p   │ mean(‖p−g‖ < 0.25·min(‖g‖, ‖p‖)), a distance threshold rather than a   │ :37-43 │
-│        │ 1.25 ratio                                                             │        │
-├────────┼────────────────────────────────────────────────────────────────────────┼────────┤
-│ Rel_d  │ mean(|d−g| / (g+1e-6))                                                 │ :20-22 │
-├────────┼────────────────────────────────────────────────────────────────────────┼────────┤
-│ δ1_d   │ mean(max(g/d, d/g) < 1.25)                                             │ :25-27 │
-└────────┴────────────────────────────────────────────────────────────────────────┴────────┘
+| Metric | Definition | Lines |
+|---|---|---|
+| Rel_p | mean(‖p − g‖ / (‖g‖ + 1e-6)) | `:30-34` |
+| δ1_p | mean(‖p − g‖ < 0.25 · min(‖g‖, ‖p‖)), a distance threshold, not a 1.25 ratio | `:37-43` |
+| Rel_d | mean(\|d − g\| / (g + 1e-6)) | `:20-22` |
+| δ1_d | mean(max(g/d, d/g) < 1.25) | `:25-27` |
 
-The dataset score is the plain mean of the per-image values, ×100 (engine.py:790-796, :1477-1483).
+Dataset score = plain mean of per-image values, ×100 (`engine.py:790-796`, `:1477-1483`).
 
-***TUM frames are evaluated at full 640×480 rather than the benchmark's resize-and-crop to 512, so your numbers are not directly comparable to the paper's tables.***
+### This project's protocol (differences from upstream)
+- **Full 640×480 TUM frames**, aspect-preserving resize to the default token budget (448×592), prediction resized back to 640×480; no 512 resize-and-crop.
+- **Metrics:** upstream's own alignment and metric functions via `evaluate_frame`, GT mask only (`pred_valid=None`), verified identical to upstream on Booster.
+- Frames with fewer than 100 valid GT pixels are recorded with `skipped = true` and empty metrics instead of being silently dropped.
+- Evaluation runs on CPU; per-frame values can differ from GPU by ~1e-6 (float32 reduction order). Negligible.
 
-***fr3's 5 single-frame holes are fine; it simply has no clean 300-frame stretch.***
+**Consequence: TUM numbers are not directly comparable to the paper's tables** (different protocol and data). Never present them as a like-for-like comparison.
 
+## Compute and latency
 
-***Remember***
-One thing to note: latency
+- Baseline predictions ran as two parallel processes (one per T4). Their latencies (1,674–1,844 ms/frame) are 25–40% above single-process runs (~1,330 ms), likely from CPU contention (4 shared cores; preprocessing and compression partly inside the timed region) and T4 clock throttling under sustained load. Accuracy is unaffected.
+- **Never report latency from parallel runs.** Compute-sweep latency must come from a single process on one GPU with nothing else running.
+- The T4 has no native bf16 support, while upstream hard-codes bf16 autocast; fp16 may be much faster on T4. To test, checking numerical agreement first.
 
-Mean latency is 1,674–1,844 ms, about 25–40% above the ~1,330 ms from your single-process runs. Two causes are likely, and they don't affect accuracy:
+## Analysis caveats
 
-CPU contention: two processes share Kaggle's 4 CPU cores for image loading, preprocessing and compressing the outputs, and part of that sits inside the timed region.
-T4 clock throttling: T4s slow down under sustained load, and here two ran flat out for 20 minutes.
+- One window per sequence, and neighbouring frames are highly correlated, so **300 frames are not 300 independent samples**. Differences between sequences are hypotheses until supported across conditions.
+- Preview panels normalise each depth map to its own 2nd–98th percentile, which hides global scale/shift differences and moderate shape errors. **"Layout looks right" does not mean low error.** Use per-pixel error maps for failure analysis.
