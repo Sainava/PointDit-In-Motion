@@ -73,3 +73,10 @@ Dataset score = plain mean of per-image values, ×100 (`engine.py:790-796`, `:14
 
 - One window per sequence, and neighbouring frames are highly correlated, so **300 frames are not 300 independent samples**. Differences between sequences are hypotheses until supported across conditions.
 - Preview panels normalise each depth map to its own 2nd–98th percentile, which hides global scale/shift differences and moderate shape errors. **"Layout looks right" does not mean low error.** Use per-pixel error maps for failure analysis.
+
+
+
+- Camera speeds use ±20 ms differencing of motion-capture poses, which amplifies jitter: absolute speeds are 30–50% above TUM's published averages. Use them for ranking and correlation, not as absolute values.
+- `sharpness_rel` is less reliable near window edges, where the ±0.5 s neighbourhood is one-sided (e.g. fr1_room frame 660: 3.81).
+- `expected_misalignment_px` is an order-of-magnitude estimate (it ignores motion direction).
+- Implied focal length (`focal_ratio`) is recovered by a least-absolute-deviations fit of X = a·(u−cx)·Z + b·(u−cx) + c (focal = 1/a), which absorbs the unknown shift. A median of (u−cx)·Z/X on aligned points fails (returned 1.01 for a true ratio of 1.2), because the alignment's shift absorbs focal errors. Uses fx only (fr3 has a 0.7% fx/fy difference). Ill-conditioned for frames dominated by one camera-facing plane.

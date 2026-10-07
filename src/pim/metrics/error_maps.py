@@ -61,6 +61,23 @@ def edge_breakdown(error: np.ndarray, band: np.ndarray, gt_valid: np.ndarray) ->
     }
 
 
+def rel_d_by_depth_tertile(error: np.ndarray, gt_depth: np.ndarray, gt_valid: np.ndarray) -> dict[str, float]:
+    """Mean error x100 over valid pixels nearer than, between and beyond the frame's GT depth tertiles."""
+    _check_shapes(error=error, gt_depth=gt_depth, gt_valid=gt_valid)
+    valid = gt_valid.astype(bool)
+    if not valid.any():
+        raise ValueError("no valid GT pixels")
+    if not np.all(np.isfinite(error[valid])):
+        raise ValueError("error is not finite on every gt_valid pixel")
+    depth, values = gt_depth[valid], error[valid]
+    low, high = np.percentile(depth, [100 / 3, 200 / 3])
+    return {
+        "rel_d_near": _mean_x100(values[depth < low]),
+        "rel_d_mid": _mean_x100(values[(depth >= low) & (depth < high)]),
+        "rel_d_far": _mean_x100(values[depth >= high]),
+    }
+
+
 def _mean_x100(values: np.ndarray) -> float:
     return 100.0 * float(values.mean(dtype=np.float64)) if values.size else float("nan")
 

@@ -10,14 +10,16 @@ from typing import Any
 import numpy as np
 
 from pim.data.tum import Frame
-from pim.metrics.geometry import FrameMetrics, backproject, evaluate_frame
+from pim.metrics.error_maps import rel_d_by_depth_tertile, relative_depth_error
+from pim.metrics.geometry import FrameMetrics, backproject, evaluate_frame, implied_focal
 
 COLUMNS = (
     "sequence", "frame_index", "rgb_timestamp", "rgb_file", "gap_ms", "depth_offset_ms",
     "gt_valid_fraction", "num_valid", "skipped", "rel_p", "delta1_p", "rel_d", "delta1_d",
-    "latency_ms", "peak_mem_gb",
+    "latency_ms", "peak_mem_gb", "rel_d_near", "rel_d_mid", "rel_d_far", "focal_ratio",
 )
 METRICS = ("rel_p", "delta1_p", "rel_d", "delta1_d")
+EXTRA_METRICS = ("rel_d_near", "rel_d_mid", "rel_d_far", "focal_ratio")
 
 
 @dataclass(frozen=True)
@@ -97,11 +99,25 @@ def evaluate_task(task: FrameTask) -> dict[str, Any]:
     depth, depth_valid = task.frame.load_depth()
     gt_points, gt_valid = backproject(depth, depth_valid, task.K)
     metrics = evaluate_frame(prediction.points, gt_points, gt_valid, pred_valid=None)
-    return frame_row(task, prediction, float(gt_valid.mean()), metrics)
+    extras = extra_metrics(prediction.points, depth, gt_valid, task.K, metrics)
+    return frame_row(task, prediction, float(gt_valid.mean()), metrics, extras)
+
+
+def extra_metrics(
+    pred_points: np.ndarray, gt_depth: np.ndarray, gt_valid: np.ndarray, K: np.ndarray, metrics: FrameMetrics
+) -> dict[str, float]:
+    if metrics.skipped:
+        return dict.fromkeys(EXTRA_METRICS, math.nan)
+    error = relative_depth_error(metrics.aligned_depth, gt_depth, gt_valid)
+    return {
+        **rel_d_by_depth_tertile(error, gt_depth, gt_valid),
+        "focal_ratio": implied_focal(pred_points, gt_valid, K[0, 2]) / K[0, 0],
+    }
 
 
 def frame_row(
-    task: FrameTask, prediction: CachedPrediction, gt_valid_fraction: float, metrics: FrameMetrics
+    task: FrameTask, prediction: CachedPrediction, gt_valid_fraction: float, metrics: FrameMetrics,
+    extras: dict[str, float],
 ) -> dict[str, Any]:
     return {
         "sequence": task.sequence,
@@ -116,6 +132,7 @@ def frame_row(
         **{name: _metric_cell(getattr(metrics, name)) for name in METRICS},
         "latency_ms": f"{prediction.latency_ms:.3f}",
         "peak_mem_gb": f"{prediction.peak_mem_gb:.4f}",
+        **{name: _metric_cell(extras[name]) for name in EXTRA_METRICS},
     }
 
 

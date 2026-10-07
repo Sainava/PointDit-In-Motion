@@ -10,6 +10,8 @@ from pim.paths import configure_fork
 
 # engine.evaluate_img2point skips samples with fewer valid GT pixels than this.
 MIN_VALID_PIXELS = 100
+# Pixels near the principal column carry little focal information and divide by X ~ 0.
+FOCAL_MIN_OFFSET_PX = 50.0
 
 
 @dataclass(frozen=True)
@@ -93,6 +95,42 @@ def evaluate_frame(
         aligned_points=aligned["pred_points"][0].float().cpu().numpy(),
         aligned_depth=aligned["pred_depth"][0].float().cpu().numpy(),
     )
+
+
+def implied_focal(points: np.ndarray, valid: np.ndarray, cx: float, min_offset_px: float = FOCAL_MIN_OFFSET_PX) -> float:
+    """Horizontal focal length, in pixels, of a point map known only up to scale and xyz shift; NaN if unusable."""
+    _check_hw(points=points, valid=valid)
+    if points.ndim != 3 or points.shape[2] != 3:
+        raise ValueError(f"points must be (H, W, 3), got {points.shape}")
+    offset = np.broadcast_to(np.arange(points.shape[1], dtype=np.float64) - cx, points.shape[:2])
+    x, z = points[..., 0].astype(np.float64), points[..., 2].astype(np.float64)
+    usable = valid.astype(bool) & (np.abs(offset) > min_offset_px) & np.isfinite(x) & np.isfinite(z)
+    if usable.sum() < 3:
+        return float("nan")
+    du, x, z = offset[usable], x[usable], z[usable]
+    # X·f = (u - cx)·Z holds only before the unknown shift t, so fit X = a(u - cx)Z + b(u - cx) + c
+    # with a = 1/f, b = -t_z/f, c = t_x. Fitting X·f = (u - cx)·Z directly lets t_z absorb most of a
+    # focal error whenever the depth range is narrow.
+    design = np.stack([du * z, du, np.ones_like(du)], axis=1)
+    norms = np.linalg.norm(design, axis=0)
+    if np.any(norms == 0):
+        return float("nan")
+    design = design / norms
+    coef = _l1_regression(design, x)
+    a = coef[0] / norms[0]
+    return float(1.0 / a) if a > 0 else float("nan")
+
+
+def _l1_regression(design: np.ndarray, target: np.ndarray, iterations: int = 30) -> np.ndarray:
+    """Least-absolute-deviations fit by iteratively reweighted least squares."""
+    floor = 1e-9 * max(float(np.median(np.abs(target))), 1e-12)
+    weights = np.ones_like(target)
+    coef = np.zeros(design.shape[1])
+    for _ in range(iterations):
+        root = np.sqrt(weights)
+        coef = np.linalg.lstsq(design * root[:, None], target * root, rcond=None)[0]
+        weights = 1.0 / np.maximum(np.abs(target - design @ coef), floor)
+    return coef
 
 
 def _skipped(num_valid: int, shape: tuple[int, int]) -> FrameMetrics:

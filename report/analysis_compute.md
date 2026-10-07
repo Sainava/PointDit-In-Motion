@@ -22,3 +22,20 @@
 - fr1_desk 362–363 (visibly blurred) are region-dominated too, so blur should not be assumed to cause only edge errors.
 
 **Candidate failure modes for further analysis:** near objects cut off by the image border; far regions seen through openings; tilted large planes (possibly a wrong implied field of view).
+
+
+## 2. Per-frame covariates
+
+Computed for all 1,200 window frames (`results/covariates/covariates.csv`): camera angular and linear speed (from ground truth, ±20 ms around each RGB timestamp), image-motion estimate, expected depth–RGB misalignment in pixels, sharpness (Laplacian variance) and sharpness relative to ±0.5 s neighbours, GT depth percentiles, depth-edge density and a near-border-object heuristic.
+
+| Sequence | Angular speed mean / max (°/s) | Linear mean (m/s) | Median sharpness | Mean expected misalignment (px) |
+|---|---|---|---|---|
+| fr1_desk | 31.9 / 96.6 | 0.54 | 0.00234 | 5.58 |
+| fr1_room | 36.8 / 87.4 | 0.33 | 0.00208 | 5.27 |
+| fr1_360 | 53.5 / 122.3 | 0.28 | 0.00087 | 1.40 |
+| fr3_long_office | 15.2 / 36.8 | 0.20 | 0.00386 | 0.02 |
+
+**Findings.**
+- Speed ordering matches TUM's published averages (fr1_360 fastest, fr3 slowest); absolute values are 30–50% higher, consistent with motion-capture jitter amplified by the short differencing window. Speeds are used as relative covariates only.
+- fr1_room 366–380: expected misalignment is 4–9 px, comparable to the 5 px edge band, so GT timing can explain part of the edge error, and some may fall just outside the band. It cannot produce region-wide errors (e.g. the foreground object in frame 373) and tracks Rel_d only loosely (frame 372: Rel_d 14.1 at 5.7 px). **Revised interpretation: region errors are model errors; edge errors are partly timing.**
+- fr1_360: mean expected misalignment is 1.4 px, so its edge-dominated errors (e.g. frames 233–243) are not timing; blur or scene content remain.
