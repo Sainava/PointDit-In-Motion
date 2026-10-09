@@ -39,3 +39,13 @@ Computed for all 1,200 window frames (`results/covariates/covariates.csv`): came
 - Speed ordering matches TUM's published averages (fr1_360 fastest, fr3 slowest); absolute values are 30–50% higher, consistent with motion-capture jitter amplified by the short differencing window. Speeds are used as relative covariates only.
 - fr1_room 366–380: expected misalignment is 4–9 px, comparable to the 5 px edge band, so GT timing can explain part of the edge error, and some may fall just outside the band. It cannot produce region-wide errors (e.g. the foreground object in frame 373) and tracks Rel_d only loosely (frame 372: Rel_d 14.1 at 5.7 px). **Revised interpretation: region errors are model errors; edge errors are partly timing.**
 - fr1_360: mean expected misalignment is 1.4 px, so its edge-dominated errors (e.g. frames 233–243) are not timing; blur or scene content remain.
+
+## 3. Error by distance and implied focal length
+
+**Error by depth tertile** (rel_d over the near / mid / far third of each frame's GT depth) shows that failing regions differ by sequence:
+- fr1_room 366–420: the near third is consistently worst (370–374: near 20.7–24.8 vs mid 8.4–9.8, far 7.3–10.5), quantitatively confirming the near-foreground failure seen in the error map of frame 373.
+- fr1_desk 337: far third worst (13.4 vs near 7.6), matching the far-background error.
+- fr1_360 241–242: near and mid elevated together.
+- fr3: isolated single-frame spikes (758, 761, 767, 768, 770, 776) where the far third jumps to ~11–12 while neighbours stay at ~3–4 and δ1 drops to ~89. With slow motion, synchronized depth and deterministic inference, this is frame-to-frame instability in far geometry (**temporal flicker**), relevant to the consistency analysis.
+
+**Implied focal length** (`focal_ratio`) is plausible and smooth on fr3 (0.78–1.29) but unreliable on parts of fr1 (up to 4.7 on fr1_room; ~0.7 on fr1_360 frames with Rel_d < 2, where a 30% FOV error is not credible). Likely ill-conditioned when one camera-facing plane dominates the view. Not used until filtered by a reliability check (split-half agreement).
