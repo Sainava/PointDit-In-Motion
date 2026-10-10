@@ -1,6 +1,6 @@
 # Analysis summary
 
-Inputs: `results/eval/baseline/per_frame.csv`, `results/covariates/covariates.csv`.
+Inputs: `results/eval/baseline/per_frame.csv`, `results/covariates/covariates.csv`, `results/eval/baseline/focal_split.csv`.
 
 Spearman rho with average ranks. Partial rho: correlation of rank residuals after linear regression on the controls' ranks. pooled_fr1: ranks and residuals computed within each fr1 sequence, then pooled; for fast vs slow, the mean of the per-sequence differences. 95% percentile CIs from a moving-block bootstrap within each sequence (block 15 frames, 2000 resamples, seed 20261010; subsets are applied after resampling). Fast / slow: fastest / slowest third of frames by angular_speed_dps. Subsets with n < 40 are skipped.
 
@@ -85,7 +85,16 @@ Frames with depth_offset_ms < 5: fr1_desk 32/300, fr1_room 3/300, fr1_360 272/30
 
 ## Q4 Implied focal length
 
-Skipped: focal_split.csv not found.
+From `results/eval/baseline/focal_split.csv`. Frames with focal_split_logdiff < ln(1.1): fr1_desk 35/300, fr1_room 9/300, fr1_360 51/300, fr3_long_office_household 26/300.
+
+- Q4 rel_d vs abs_log_focal_ratio [focal_split_logdiff<ln(1.1)], fr1_desk: skipped, n = 35 < 40
+- Q4 rel_d vs abs_log_focal_ratio [focal_split_logdiff<ln(1.1)], fr1_room: skipped, n = 9 < 40
+- Q4 rel_d vs abs_log_focal_ratio [focal_split_logdiff<ln(1.1)], fr3_long_office_household: skipped, n = 26 < 40
+- Q4 rel_d vs abs_log_focal_ratio [focal_split_logdiff<ln(1.1)], pooled_fr1: skipped, fewer than 2 fr1 sequences have n >= 40
+
+| unit | y | x | subset | controls | n | rho | 95% CI |
+|---|---|---|---|---|---|---|---|
+| fr1_360 | rel_d | abs_log_focal_ratio | focal_split_logdiff<ln(1.1) | - | 51 | -0.907 | [-0.936, -0.646] |
 
 ## Q5 Temporal spikes
 
@@ -111,7 +120,7 @@ Spike: rel_d exceeds the median rel_d of the frames within ±5 positions (itself
 
 ## Robustness to block length
 
-CI position relative to zero at block lengths 8, 15, 30: 10 of 54 estimates differ from block 15 at block 8 or 30.
+CI position relative to zero at block lengths 8, 15, 30: 10 of 55 estimates differ from block 15 at block 8 or 30.
 
 | estimate | identity | block 8 | block 15 | block 30 |
 |---|---|---|---|---|

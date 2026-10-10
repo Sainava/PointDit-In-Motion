@@ -116,3 +116,6 @@ rgbd_dataset_freiburg3_long_office_household,Q3,near_border_fraction,rel_d_near,
 pooled_fr1,Q3,near_border_fraction,rel_d_near,all,,900,0.25556705328725665,0.09235854297312907,0.40353514111806876,8
 pooled_fr1,Q3,near_border_fraction,rel_d_near,all,,900,0.25556705328725665,0.04104234006839136,0.4382898678565968,15
 pooled_fr1,Q3,near_border_fraction,rel_d_near,all,,900,0.25556705328725665,0.0017562412890850265,0.4524545675039585,30
+rgbd_dataset_freiburg1_360,Q4,abs_log_focal_ratio,rel_d,focal_split_logdiff<ln(1.1),,51,-0.9068778280542986,-0.9425580212828937,-0.7241519288612783,8
+rgbd_dataset_freiburg1_360,Q4,abs_log_focal_ratio,rel_d,focal_split_logdiff<ln(1.1),,51,-0.9068778280542986,-0.9361380064639471,-0.6459170800352463,15
+rgbd_dataset_freiburg1_360,Q4,abs_log_focal_ratio,rel_d,focal_split_logdiff<ln(1.1),,51,-0.9068778280542986,-0.9366749497280222,-0.5781153736022716,30

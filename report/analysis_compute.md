@@ -49,3 +49,25 @@ Computed for all 1,200 window frames (`results/covariates/covariates.csv`): came
 - fr3: isolated single-frame spikes (758, 761, 767, 768, 770, 776) where the far third jumps to ~11–12 while neighbours stay at ~3–4 and δ1 drops to ~89. With slow motion, synchronized depth and deterministic inference, this is frame-to-frame instability in far geometry (**temporal flicker**), relevant to the consistency analysis.
 
 **Implied focal length** (`focal_ratio`) is plausible and smooth on fr3 (0.78–1.29) but unreliable on parts of fr1 (up to 4.7 on fr1_room; ~0.7 on fr1_360 frames with Rel_d < 2, where a 30% FOV error is not credible). Likely ill-conditioned when one camera-facing plane dominates the view. Not used until filtered by a reliability check (split-half agreement).
+
+## 4. What explains the error: per-frame analysis
+
+**Method.** All 1,200 frames, per sequence and pooled over fr1 (ranked within sequence). Spearman and partial Spearman correlations; 95% CIs from a moving-block bootstrap (block 15, 2,000 resamples); claims only where the CI excludes zero at block lengths 8, 15 and 30. Inputs and full tables: `results/analysis/`; forest plot: `report/figures/analysis/correlations_forest.png`.
+
+**Image sharpness (key result).** Lower relative sharpness predicts higher depth error independently of GT timing and scene content: partial Spearman of rel_d vs sharpness_rel, controlling for expected misalignment and edge density, is −0.23 to −0.29 in all four sequences (all CIs exclude zero) and −0.26 [−0.36, −0.18] pooled over fr1, robust to block length. It also holds on fr3, where expected misalignment is ~0.02 px, so it is not a GT-timing artifact. It is described as an image-sharpness effect, not specifically motion blur: fr3 moves slowly yet shows the same effect.
+
+**Camera speed** is a weak, inconsistent predictor (clear only on fr1_360, ρ 0.34); fast-vs-slow differences in median rel_d all have CIs spanning zero. Sharpness, the property of the image the model sees, matters more than speed.
+
+**GT timing** could not be tested by restriction: only 32 fr1_desk and 3 fr1_room frames have depth offset < 5 ms. It was controlled through expected misalignment instead (above).
+
+**Scene content** is the strongest factor: rel_d rises with depth-edge density (pooled ρ 0.62; fr1_360 0.86) and depth range (pooled 0.54). Within-sequence content varies slowly, so several per-sequence intervals lose significance at block 30; only the pooled results and fr1_360 are robust. Edge density is computed from GT and includes hole boundaries, so part of this effect may reflect GT quality around edges.
+
+**Near-border objects** are at most a weak factor (pooled ρ 0.26, borderline); the fr1_room 373 case is not a general failure mode.
+
+**Temporal spikes** are rare (≤ 0.7% of frames) and of two kinds: fr1_desk 337/338 occur at fast, blurred moments (75 °/s vs 28 typical, sharpness_rel 0.69), while fr3 758/761 occur at slower-than-typical motion with normal sharpness, i.e. not motion-driven: near-identical inputs produce different far geometry. The spike rule misses region-level flicker that barely moves overall rel_d (fr3 767–776).
+
+**Implied focal length: inconclusive.** A split-half check (fitting left and right image halves separately) passes only 121 of 1,200 frames. The halves disagree systematically in opposite directions even on fr3, suggesting the fit lacks a term for horizontal offset (principal point or small yaw) rather than random noise. The only testable subset (fr1_360, n = 51, ρ −0.91) consists mostly of plane-dominated frames where both halves are equally ill-conditioned, so the result is an artifact. Not used in conclusions.
+
+**Summary.** PointDiT's per-frame error on TUM is driven mainly by scene content (depth edges, depth range) and secondarily by image sharpness, which has an effect independent of GT timing. Camera speed matters only through sharpness. A small number of frames show non-motion-driven instability in far geometry, which motivates the temporal-consistency analysis.
+
+**Limitations.** One 300-frame window per sequence; strongly autocorrelated frames; correlational analysis only; Kinect GT has noise and holes at edges; fr1 intrinsics are approximate.
