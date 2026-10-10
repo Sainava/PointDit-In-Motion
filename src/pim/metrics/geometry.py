@@ -12,6 +12,18 @@ from pim.paths import configure_fork
 MIN_VALID_PIXELS = 100
 # Pixels near the principal column carry little focal information and divide by X ~ 0.
 FOCAL_MIN_OFFSET_PX = 50.0
+# Upstream's exact L1 aligners build an (N, N) anchor matrix, so they must only ever see its 64x64
+# masked subsample; a full-resolution fit (~300k pixels) exhausts memory.
+MAX_ALIGNMENT_PIXELS = 64 * 64
+# Aligners compute_metrics calls on that subsample, and whether their inputs are (..., N, 3) points.
+_UPSTREAM_ALIGNERS = {
+    "align_depth_scale": False,
+    "align_depth_affine": False,
+    "align_points_scale": True,
+    "align_points_scale_z_shift": True,
+    "align_points_scale_xyz_shift": True,
+    "align_points_xyz_shift": True,
+}
 
 
 @dataclass(frozen=True)
@@ -146,11 +158,29 @@ def _skipped(num_valid: int, shape: tuple[int, int]) -> FrameMetrics:
     )
 
 
+def check_alignment_size(num_pixels: int) -> None:
+    if num_pixels > MAX_ALIGNMENT_PIXELS:
+        raise AssertionError(f"alignment fit on {num_pixels} pixels, more than the {MAX_ALIGNMENT_PIXELS}-pixel subsample")
+
+
+def _size_checked(fn, points: bool):
+    def checked(src, *args, **kwargs):
+        check_alignment_size(src.shape[-2] if points else src.shape[-1])
+        return fn(src, *args, **kwargs)
+
+    checked.size_checked = True
+    return checked
+
+
 def _upstream_compute_metrics():
     configure_fork()
-    from metrics.compute_metrics import compute_metrics
+    import metrics.compute_metrics as module
 
-    return compute_metrics
+    for name, points in _UPSTREAM_ALIGNERS.items():
+        fn = getattr(module, name)
+        if not getattr(fn, "size_checked", False):
+            setattr(module, name, _size_checked(fn, points))
+    return module.compute_metrics
 
 
 def _check_hw(**arrays: np.ndarray) -> None:
