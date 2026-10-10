@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from pim.evaluation import COLUMNS
+from pim.evaluation import COLUMNS, EXTRA_METRICS, extra_metrics
+from pim.metrics.error_maps import rel_d_by_depth_tertile, relative_depth_error
 from pim.metrics.geometry import backproject, evaluate_frame
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -148,10 +149,13 @@ def test_frame_with_too_few_valid_pixels_has_empty_metrics(setup, tmp_path: Path
     assert skipped["skipped"] == "True"
     assert int(skipped["num_valid"]) == 50
     assert float(skipped["gt_valid_fraction"]) == pytest.approx(50 / (H * W), abs=1e-6)
-    assert all(skipped[m] == "" for m in ("rel_p", "delta1_p", "rel_d", "delta1_d"))
+    assert all(skipped[m] == "" for m in ("rel_p", "delta1_p", "rel_d", "delta1_d", *EXTRA_METRICS))
     for r in rows[:SKIPPED_FRAME - 1] + rows[SKIPPED_FRAME:]:
         assert r["skipped"] == "False"
         assert 0.0 <= float(r["rel_d"]) < 5.0 and float(r["delta1_d"]) > 95.0
+        assert all(0.0 <= float(r[m]) < 5.0 for m in ("rel_d_near", "rel_d_mid", "rel_d_far"))
+        # No pixel of an 80 px wide frame is more than 50 px from cx.
+        assert r["focal_ratio"] == ""
 
 
 def test_rgb_file_mismatch_fails_before_writing_anything(setup, tmp_path: Path) -> None:
@@ -192,3 +196,59 @@ def test_check_frame_numpy_recomputation_matches_evaluate_frame() -> None:
     assert 1.0 < result.rel_p < 50.0
     for name in ("rel_p", "delta1_p", "rel_d", "delta1_d"):
         assert recomputed[name] == pytest.approx(getattr(result, name), abs=check_frame.TOLERANCE)
+
+
+def three_level_depth() -> np.ndarray:
+    depth = np.full((H, W), 1.0, np.float32)
+    depth[:, W // 3:2 * W // 3] = 2.0
+    depth[:, 2 * W // 3:] = 4.0
+    return depth
+
+
+def test_error_only_in_the_far_third() -> None:
+    depth = three_level_depth()
+    valid = np.ones((H, W), bool)
+    aligned = np.where(depth == 4.0, depth * 1.1, depth)
+
+    thirds = rel_d_by_depth_tertile(relative_depth_error(aligned, depth, valid), depth, valid)
+
+    assert thirds["rel_d_near"] == 0.0
+    assert thirds["rel_d_mid"] == 0.0
+    assert thirds["rel_d_far"] == pytest.approx(10.0, rel=1e-5)
+
+
+def test_pixel_weighted_thirds_reproduce_rel_d() -> None:
+    depth = depth_image(1).astype(np.float32)
+    valid = depth > 0
+    gt_points, valid = backproject(depth, valid, K)
+    rng = np.random.default_rng(1)
+    pred = 0.7 * gt_points + 0.2 + 0.05 * rng.standard_normal(gt_points.shape).astype(np.float32)
+
+    metrics = evaluate_frame(pred, gt_points, valid)
+    thirds = extra_metrics(pred, depth, valid, K, metrics)
+
+    low, high = np.percentile(depth[valid], [100 / 3, 200 / 3])
+    d = depth[valid]
+    counts = np.array([(d < low).sum(), ((d >= low) & (d < high)).sum(), (d >= high).sum()])
+    values = np.array([thirds["rel_d_near"], thirds["rel_d_mid"], thirds["rel_d_far"]])
+    assert counts.sum() == metrics.num_valid
+    assert float(counts @ values / counts.sum()) == pytest.approx(metrics.rel_d, abs=1e-4)
+
+
+@pytest.mark.parametrize("focal_scale", [1.0, 1.2])
+def test_focal_ratio_of_a_prediction_made_with_scaled_focal(focal_scale: float) -> None:
+    v, u = np.indices((180, 240))
+    depth = (1.2 + 0.01 * v + 0.004 * u).astype(np.float32)
+    depth[30:90, 60:135] = 0.9
+    K = np.array([[210.0, 0.0, 119.5], [0.0, 216.0, 89.5], [0.0, 0.0, 1.0]])
+    gt_points, valid = backproject(depth, np.ones(depth.shape, bool), K)
+    K_pred = K.copy()
+    K_pred[0, 0] *= focal_scale
+    K_pred[1, 1] *= focal_scale
+    pred_points, _ = backproject(depth, valid, K_pred)
+    pred = (0.4 * pred_points + np.array([0.1, -0.3, 0.6])).astype(np.float32)
+
+    metrics = evaluate_frame(pred, gt_points, valid)
+    ratio = extra_metrics(pred, depth, valid, K, metrics)["focal_ratio"]
+
+    assert ratio == pytest.approx(focal_scale, abs=1e-3)

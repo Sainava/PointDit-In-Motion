@@ -73,3 +73,15 @@ Dataset score = plain mean of per-image values, ×100 (`engine.py:790-796`, `:14
 
 - One window per sequence, and neighbouring frames are highly correlated, so **300 frames are not 300 independent samples**. Differences between sequences are hypotheses until supported across conditions.
 - Preview panels normalise each depth map to its own 2nd–98th percentile, which hides global scale/shift differences and moderate shape errors. **"Layout looks right" does not mean low error.** Use per-pixel error maps for failure analysis.
+
+
+
+- Camera speeds use ±20 ms differencing of motion-capture poses, which amplifies jitter: absolute speeds are 30–50% above TUM's published averages. Use them for ranking and correlation, not as absolute values.
+- `sharpness_rel` is less reliable near window edges, where the ±0.5 s neighbourhood is one-sided (e.g. fr1_room frame 660: 3.81).
+- `expected_misalignment_px` is an order-of-magnitude estimate (it ignores motion direction).
+- Implied focal length (`focal_ratio`) is recovered by a least-absolute-deviations fit of X = a·(u−cx)·Z + b·(u−cx) + c (focal = 1/a), which absorbs the unknown shift. A median of (u−cx)·Z/X on aligned points fails (returned 1.01 for a true ratio of 1.2), because the alignment's shift absorbs focal errors. Uses fx only (fr3 has a 0.7% fx/fy difference). Ill-conditioned for frames dominated by one camera-facing plane.
+
+- Statistics (scripts/analyze.py): Spearman with average ranks; partial Spearman via rank residuals after linear regression on the controls' ranks; pooled fr1 results rank within each sequence first. 95% CIs from a moving-block bootstrap within each sequence (block 15, 2000 resamples, fixed seed); resamples always cover the whole sequence and subset filters are applied afterwards. Claims are made only where the CI excludes zero at block lengths 8, 15 and 30.
+- The depth_offset_ms < 5 restriction is unusable on fr1_desk (32 frames) and fr1_room (3); fr1 depth is almost always offset. Timing is controlled through expected_misalignment_px in partial correlations instead.
+- Spike rule: rel_d above the ±5-frame neighbour median by more than max(1.5 points, 50%). It misses region-level flicker that barely moves overall rel_d (fr3 767–776); the consistency analysis needs a per-region measure. Spike CIs are near-meaningless with 1–2 spikes per sequence.
+- edge_density is computed from GT and includes hole boundaries, so it partly reflects GT quality around edges.

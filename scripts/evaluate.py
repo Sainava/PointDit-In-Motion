@@ -35,6 +35,10 @@ PROTOCOL = {
     "resolution": "full 640x480 frames, no resize or crop",
     "metrics": "rel_p, delta1_p, rel_d, delta1_d from upstream metrics/metrics.py, x100",
     "min_valid_pixels": MIN_VALID_PIXELS,
+    "rel_d_near_mid_far": "mean |aligned depth - GT| / GT x100 over valid pixels below, between and above the "
+                          "frame's GT depth tertiles, with the same aligned depth as rel_d",
+    "focal_ratio": "implied fx / true fx: L1 fit of X = a(u - cx)Z + b(u - cx) + c, f = 1/a, on the raw "
+                   "prediction over GT-valid pixels with |u - cx| > 50 px",
 }
 PROGRESS_EVERY = 50
 

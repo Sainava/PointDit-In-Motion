@@ -1,0 +1,121 @@
+sequence,question,x,y,subset,controls,n,rho,ci_low,ci_high,block_length
+rgbd_dataset_freiburg1_desk,Q1,angular_speed_dps,rel_d,all,,300,0.15321636907076744,-0.05582448818657131,0.38205562203055277,8
+rgbd_dataset_freiburg1_desk,Q1,angular_speed_dps,rel_d,all,,300,0.15321636907076744,-0.05643088662009962,0.4119230062805302,15
+rgbd_dataset_freiburg1_desk,Q1,angular_speed_dps,rel_d,all,,300,0.15321636907076744,-0.10963991279933306,0.4429825111673927,30
+rgbd_dataset_freiburg1_room,Q1,angular_speed_dps,rel_d,all,,300,-0.04747697196635517,-0.3357221264956525,0.24521045262736613,8
+rgbd_dataset_freiburg1_room,Q1,angular_speed_dps,rel_d,all,,300,-0.04747697196635517,-0.37177038970705756,0.33459823870572536,15
+rgbd_dataset_freiburg1_room,Q1,angular_speed_dps,rel_d,all,,300,-0.04747697196635517,-0.358415281170043,0.3975699085501688,30
+rgbd_dataset_freiburg1_360,Q1,angular_speed_dps,rel_d,all,,300,0.3441091567684085,0.08217858935061308,0.5583028095911975,8
+rgbd_dataset_freiburg1_360,Q1,angular_speed_dps,rel_d,all,,300,0.3441091567684085,0.06824001055419635,0.5782793574975528,15
+rgbd_dataset_freiburg1_360,Q1,angular_speed_dps,rel_d,all,,300,0.3441091567684085,0.10550377451835359,0.5909479703718673,30
+rgbd_dataset_freiburg3_long_office_household,Q1,angular_speed_dps,rel_d,all,,300,0.1814651273903043,-0.009568614099405825,0.3987814632860983,8
+rgbd_dataset_freiburg3_long_office_household,Q1,angular_speed_dps,rel_d,all,,300,0.1814651273903043,-0.04783639181507958,0.41999710740721763,15
+rgbd_dataset_freiburg3_long_office_household,Q1,angular_speed_dps,rel_d,all,,300,0.1814651273903043,-0.030277593645376223,0.42238403174241146,30
+pooled_fr1,Q1,angular_speed_dps,rel_d,all,,900,0.14994951795760691,0.009855028586455103,0.29767490584807654,8
+pooled_fr1,Q1,angular_speed_dps,rel_d,all,,900,0.14994951795760691,-0.006144669684376659,0.32865012666864535,15
+pooled_fr1,Q1,angular_speed_dps,rel_d,all,,900,0.14994951795760691,0.004960075297692393,0.35651615156912186,30
+rgbd_dataset_freiburg1_desk,Q1,sharpness_rel,rel_d,all,,300,-0.22472585776062243,-0.3978924913544249,-0.053380060911530414,8
+rgbd_dataset_freiburg1_desk,Q1,sharpness_rel,rel_d,all,,300,-0.22472585776062243,-0.39785780369685625,-0.05928652865018188,15
+rgbd_dataset_freiburg1_desk,Q1,sharpness_rel,rel_d,all,,300,-0.22472585776062243,-0.41249967945962857,-0.04783977237818584,30
+rgbd_dataset_freiburg1_room,Q1,sharpness_rel,rel_d,all,,300,-0.21262523590297297,-0.39787497874677236,-0.010784092013666865,8
+rgbd_dataset_freiburg1_room,Q1,sharpness_rel,rel_d,all,,300,-0.21262523590297297,-0.40841457100751827,0.01886420906299526,15
+rgbd_dataset_freiburg1_room,Q1,sharpness_rel,rel_d,all,,300,-0.21262523590297297,-0.43461518527153886,0.003029467451710752,30
+rgbd_dataset_freiburg1_360,Q1,sharpness_rel,rel_d,all,,300,-0.0569809484282489,-0.2872185671688726,0.15423908743135717,8
+rgbd_dataset_freiburg1_360,Q1,sharpness_rel,rel_d,all,,300,-0.0569809484282489,-0.26996372799985174,0.1400547549706236,15
+rgbd_dataset_freiburg1_360,Q1,sharpness_rel,rel_d,all,,300,-0.0569809484282489,-0.2756297034709989,0.0840827383015051,30
+rgbd_dataset_freiburg3_long_office_household,Q1,sharpness_rel,rel_d,all,,300,-0.27572097030740234,-0.43153608446832836,-0.11214143050388925,8
+rgbd_dataset_freiburg3_long_office_household,Q1,sharpness_rel,rel_d,all,,300,-0.27572097030740234,-0.4192866012043511,-0.11041087245071278,15
+rgbd_dataset_freiburg3_long_office_household,Q1,sharpness_rel,rel_d,all,,300,-0.27572097030740234,-0.4078595160276115,-0.1437239373782859,30
+pooled_fr1,Q1,sharpness_rel,rel_d,all,,900,-0.16477765540202305,-0.28540902039262955,-0.05670950046782829,8
+pooled_fr1,Q1,sharpness_rel,rel_d,all,,900,-0.16477765540202305,-0.2783473667815188,-0.05548304478966135,15
+pooled_fr1,Q1,sharpness_rel,rel_d,all,,900,-0.16477765540202305,-0.29327331518183486,-0.07251081829121328,30
+rgbd_dataset_freiburg1_360,Q2,angular_speed_dps,rel_d,depth_offset_ms<5,,272,0.3247584301958081,0.06790936238446074,0.5403182718936554,8
+rgbd_dataset_freiburg1_360,Q2,angular_speed_dps,rel_d,depth_offset_ms<5,,272,0.3247584301958081,0.03889924993188065,0.5642007834599186,15
+rgbd_dataset_freiburg1_360,Q2,angular_speed_dps,rel_d,depth_offset_ms<5,,272,0.3247584301958081,0.07105419816732936,0.5803681086913381,30
+rgbd_dataset_freiburg3_long_office_household,Q2,angular_speed_dps,rel_d,depth_offset_ms<5,,300,0.1814651273903043,-0.009568614099405825,0.3987814632860983,8
+rgbd_dataset_freiburg3_long_office_household,Q2,angular_speed_dps,rel_d,depth_offset_ms<5,,300,0.1814651273903043,-0.04783639181507958,0.41999710740721763,15
+rgbd_dataset_freiburg3_long_office_household,Q2,angular_speed_dps,rel_d,depth_offset_ms<5,,300,0.1814651273903043,-0.030277593645376223,0.42238403174241146,30
+rgbd_dataset_freiburg1_360,Q2,sharpness_rel,rel_d,depth_offset_ms<5,,272,-0.03346615637078295,-0.26813612287638494,0.17869455787120223,8
+rgbd_dataset_freiburg1_360,Q2,sharpness_rel,rel_d,depth_offset_ms<5,,272,-0.03346615637078295,-0.2534436146603133,0.1689799851099757,15
+rgbd_dataset_freiburg1_360,Q2,sharpness_rel,rel_d,depth_offset_ms<5,,272,-0.03346615637078295,-0.26842637104832623,0.11918314239677172,30
+rgbd_dataset_freiburg3_long_office_household,Q2,sharpness_rel,rel_d,depth_offset_ms<5,,300,-0.27572097030740234,-0.43153608446832836,-0.11214143050388925,8
+rgbd_dataset_freiburg3_long_office_household,Q2,sharpness_rel,rel_d,depth_offset_ms<5,,300,-0.27572097030740234,-0.4192866012043511,-0.11041087245071278,15
+rgbd_dataset_freiburg3_long_office_household,Q2,sharpness_rel,rel_d,depth_offset_ms<5,,300,-0.27572097030740234,-0.4078595160276115,-0.1437239373782859,30
+rgbd_dataset_freiburg1_desk,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.29421030030221434,-0.43512036492976397,-0.15834652677157568,8
+rgbd_dataset_freiburg1_desk,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.29421030030221434,-0.42410316281674243,-0.16958984544094272,15
+rgbd_dataset_freiburg1_desk,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.29421030030221434,-0.43120610073534205,-0.1730101216727495,30
+rgbd_dataset_freiburg1_room,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.2751162375253947,-0.4148818229894585,-0.10222815472508155,8
+rgbd_dataset_freiburg1_room,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.2751162375253947,-0.4211790092866061,-0.08475334633326169,15
+rgbd_dataset_freiburg1_room,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.2751162375253947,-0.4179504415743619,-0.10321706490595858,30
+rgbd_dataset_freiburg1_360,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.22905693071713307,-0.4326605064874391,-0.023916623430831188,8
+rgbd_dataset_freiburg1_360,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.22905693071713307,-0.44882321213944554,-0.049744648096894,15
+rgbd_dataset_freiburg1_360,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.22905693071713307,-0.4545766016315207,-0.08204238679053338,30
+rgbd_dataset_freiburg3_long_office_household,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.2743925364529163,-0.41151990018342693,-0.11830899087569945,8
+rgbd_dataset_freiburg3_long_office_household,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.2743925364529163,-0.39099096597335486,-0.10727321305894096,15
+rgbd_dataset_freiburg3_long_office_household,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,300,-0.2743925364529163,-0.3976118962255271,-0.12795162482202604,30
+pooled_fr1,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,900,-0.26368226232046466,-0.355916597632167,-0.17322256777559725,8
+pooled_fr1,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,900,-0.26368226232046466,-0.3566976763501424,-0.1793960466360113,15
+pooled_fr1,Q2,sharpness_rel,rel_d,all,expected_misalignment_px edge_density,900,-0.26368226232046466,-0.36100754962278525,-0.19359722496626897,30
+rgbd_dataset_freiburg1_desk,Q3,edge_density,rel_d,all,,300,0.41807886754297274,0.11990851227800227,0.6217005573803286,8
+rgbd_dataset_freiburg1_desk,Q3,edge_density,rel_d,all,,300,0.41807886754297274,0.032136332297990754,0.6583226140737394,15
+rgbd_dataset_freiburg1_desk,Q3,edge_density,rel_d,all,,300,0.41807886754297274,-0.06931811490386075,0.6838833585520327,30
+rgbd_dataset_freiburg1_room,Q3,edge_density,rel_d,all,,300,0.567547194968833,0.32457657494235936,0.7322483472517354,8
+rgbd_dataset_freiburg1_room,Q3,edge_density,rel_d,all,,300,0.567547194968833,0.2284480571415313,0.7454380681022285,15
+rgbd_dataset_freiburg1_room,Q3,edge_density,rel_d,all,,300,0.567547194968833,0.10217104037488532,0.729313736090982,30
+rgbd_dataset_freiburg1_360,Q3,edge_density,rel_d,all,,300,0.8608908987877643,0.7475567647222688,0.914482629590982,8
+rgbd_dataset_freiburg1_360,Q3,edge_density,rel_d,all,,300,0.8608908987877643,0.7202724702184026,0.9196057697252826,15
+rgbd_dataset_freiburg1_360,Q3,edge_density,rel_d,all,,300,0.8608908987877643,0.7121771412427591,0.920602399607809,30
+rgbd_dataset_freiburg3_long_office_household,Q3,edge_density,rel_d,all,,300,0.5244742719363548,0.2513230417624938,0.7130624397132473,8
+rgbd_dataset_freiburg3_long_office_household,Q3,edge_density,rel_d,all,,300,0.5244742719363548,0.11972714433843516,0.7634506612844805,15
+rgbd_dataset_freiburg3_long_office_household,Q3,edge_density,rel_d,all,,300,0.5244742719363548,-0.022183410492006055,0.792712894221962,30
+pooled_fr1,Q3,edge_density,rel_d,all,,900,0.6155056537665234,0.48050196463381983,0.701143247648796,8
+pooled_fr1,Q3,edge_density,rel_d,all,,900,0.6155056537665234,0.4356597864250038,0.7076475939793089,15
+pooled_fr1,Q3,edge_density,rel_d,all,,900,0.6155056537665234,0.37998685542079974,0.7218528219050029,30
+rgbd_dataset_freiburg1_desk,Q3,depth_range_ratio,rel_d,all,,300,0.3803063414540254,0.09917229713077262,0.5963100601685192,8
+rgbd_dataset_freiburg1_desk,Q3,depth_range_ratio,rel_d,all,,300,0.3803063414540254,0.022209766985562967,0.6552495245134734,15
+rgbd_dataset_freiburg1_desk,Q3,depth_range_ratio,rel_d,all,,300,0.3803063414540254,-0.14106839706321556,0.6717204002946904,30
+rgbd_dataset_freiburg1_room,Q3,depth_range_ratio,rel_d,all,,300,0.5115644692415728,0.22570061376349665,0.7450863706528896,8
+rgbd_dataset_freiburg1_room,Q3,depth_range_ratio,rel_d,all,,300,0.5115644692415728,0.09392804124566266,0.7774154229023127,15
+rgbd_dataset_freiburg1_room,Q3,depth_range_ratio,rel_d,all,,300,0.5115644692415728,-0.08733034783251822,0.7991573364615351,30
+rgbd_dataset_freiburg1_360,Q3,depth_range_ratio,rel_d,all,,300,0.7298357374162486,0.5596863418415042,0.8533598099538269,8
+rgbd_dataset_freiburg1_360,Q3,depth_range_ratio,rel_d,all,,300,0.7298357374162486,0.5161249845333683,0.8697766638165778,15
+rgbd_dataset_freiburg1_360,Q3,depth_range_ratio,rel_d,all,,300,0.7298357374162486,0.5028872263002222,0.8733608261139264,30
+rgbd_dataset_freiburg3_long_office_household,Q3,depth_range_ratio,rel_d,all,,300,0.5467361802743117,0.2736958567036089,0.7639520622177102,8
+rgbd_dataset_freiburg3_long_office_household,Q3,depth_range_ratio,rel_d,all,,300,0.5467361802743117,0.14941735199346598,0.8213024671572371,15
+rgbd_dataset_freiburg3_long_office_household,Q3,depth_range_ratio,rel_d,all,,300,0.5467361802743117,0.022070823952224636,0.8615789302962326,30
+pooled_fr1,Q3,depth_range_ratio,rel_d,all,,900,0.5405686550737588,0.3970116199261992,0.6637440015632597,8
+pooled_fr1,Q3,depth_range_ratio,rel_d,all,,900,0.5405686550737588,0.34725155594834506,0.6841219745733887,15
+pooled_fr1,Q3,depth_range_ratio,rel_d,all,,900,0.5405686550737588,0.27710116009893476,0.6995345843338022,30
+rgbd_dataset_freiburg1_desk,Q3,near_border_fraction,rel_d,all,,300,0.11869265284865417,-0.07621484736705765,0.3150632719038243,8
+rgbd_dataset_freiburg1_desk,Q3,near_border_fraction,rel_d,all,,300,0.11869265284865417,-0.12673847826940934,0.35173561677317344,15
+rgbd_dataset_freiburg1_desk,Q3,near_border_fraction,rel_d,all,,300,0.11869265284865417,-0.23027356058098397,0.36776949181193486,30
+rgbd_dataset_freiburg1_room,Q3,near_border_fraction,rel_d,all,,300,0.3001284576595344,-0.032510914474077675,0.5874524260071531,8
+rgbd_dataset_freiburg1_room,Q3,near_border_fraction,rel_d,all,,300,0.3001284576595344,-0.139591310007959,0.6412300228806701,15
+rgbd_dataset_freiburg1_room,Q3,near_border_fraction,rel_d,all,,300,0.3001284576595344,-0.24295941910089514,0.6576963526994454,30
+rgbd_dataset_freiburg1_360,Q3,near_border_fraction,rel_d,all,,300,0.3351985455178801,0.0935600294840275,0.5647268114976179,8
+rgbd_dataset_freiburg1_360,Q3,near_border_fraction,rel_d,all,,300,0.3351985455178801,0.040895899132110204,0.6018132708601932,15
+rgbd_dataset_freiburg1_360,Q3,near_border_fraction,rel_d,all,,300,0.3351985455178801,-0.02697515382146547,0.6483001132331746,30
+rgbd_dataset_freiburg3_long_office_household,Q3,near_border_fraction,rel_d,all,,300,0.27859321438253826,0.009388238248979297,0.4817246799989714,8
+rgbd_dataset_freiburg3_long_office_household,Q3,near_border_fraction,rel_d,all,,300,0.27859321438253826,-0.06502352132393047,0.5409243711506871,15
+rgbd_dataset_freiburg3_long_office_household,Q3,near_border_fraction,rel_d,all,,300,0.27859321438253826,-0.12231622403012472,0.5875661734806277,30
+pooled_fr1,Q3,near_border_fraction,rel_d,all,,900,0.26004094814082906,0.10363414550618352,0.40261637425730695,8
+pooled_fr1,Q3,near_border_fraction,rel_d,all,,900,0.26004094814082906,0.058188286359170595,0.4334667049002818,15
+pooled_fr1,Q3,near_border_fraction,rel_d,all,,900,0.26004094814082906,0.002509451572056374,0.4465878778138993,30
+rgbd_dataset_freiburg1_desk,Q3,near_border_fraction,rel_d_near,all,,300,0.21659324207989356,0.028360635580881654,0.39455373334475097,8
+rgbd_dataset_freiburg1_desk,Q3,near_border_fraction,rel_d_near,all,,300,0.21659324207989356,-0.028487317793466412,0.4487719060578173,15
+rgbd_dataset_freiburg1_desk,Q3,near_border_fraction,rel_d_near,all,,300,0.21659324207989356,-0.10720032225797325,0.4681717264627109,30
+rgbd_dataset_freiburg1_room,Q3,near_border_fraction,rel_d_near,all,,300,0.20552722044680824,-0.13730342641455487,0.516661395349707,8
+rgbd_dataset_freiburg1_room,Q3,near_border_fraction,rel_d_near,all,,300,0.20552722044680824,-0.26793624563833,0.5865572378230925,15
+rgbd_dataset_freiburg1_room,Q3,near_border_fraction,rel_d_near,all,,300,0.20552722044680824,-0.3560599188161195,0.6211369627072094,30
+rgbd_dataset_freiburg1_360,Q3,near_border_fraction,rel_d_near,all,,300,0.3450163967989173,0.09783867699670461,0.571077512305076,8
+rgbd_dataset_freiburg1_360,Q3,near_border_fraction,rel_d_near,all,,300,0.3450163967989173,0.023492589764036512,0.6172310012698742,15
+rgbd_dataset_freiburg1_360,Q3,near_border_fraction,rel_d_near,all,,300,0.3450163967989173,0.008331818340439938,0.6399168019489286,30
+rgbd_dataset_freiburg3_long_office_household,Q3,near_border_fraction,rel_d_near,all,,300,-0.08550406246260307,-0.3809795177014922,0.2023934537574479,8
+rgbd_dataset_freiburg3_long_office_household,Q3,near_border_fraction,rel_d_near,all,,300,-0.08550406246260307,-0.46641049533816126,0.3185329465499475,15
+rgbd_dataset_freiburg3_long_office_household,Q3,near_border_fraction,rel_d_near,all,,300,-0.08550406246260307,-0.5998220766214228,0.4422974767327193,30
+pooled_fr1,Q3,near_border_fraction,rel_d_near,all,,900,0.25556705328725665,0.09235854297312907,0.40353514111806876,8
+pooled_fr1,Q3,near_border_fraction,rel_d_near,all,,900,0.25556705328725665,0.04104234006839136,0.4382898678565968,15
+pooled_fr1,Q3,near_border_fraction,rel_d_near,all,,900,0.25556705328725665,0.0017562412890850265,0.4524545675039585,30
+rgbd_dataset_freiburg1_360,Q4,abs_log_focal_ratio,rel_d,focal_split_logdiff<ln(1.1),,51,-0.9068778280542986,-0.9425580212828937,-0.7241519288612783,8
+rgbd_dataset_freiburg1_360,Q4,abs_log_focal_ratio,rel_d,focal_split_logdiff<ln(1.1),,51,-0.9068778280542986,-0.9361380064639471,-0.6459170800352463,15
+rgbd_dataset_freiburg1_360,Q4,abs_log_focal_ratio,rel_d,focal_split_logdiff<ln(1.1),,51,-0.9068778280542986,-0.9366749497280222,-0.5781153736022716,30
