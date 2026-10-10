@@ -59,6 +59,8 @@ class PixelSetMetrics:
     """num_pixels over GT-valid pixels of frame j."""
     too_few: bool
     gt_floor: ErrorSummary
+    gt_floor_rgb: ErrorSummary
+    """GT floor with GT_i warped by T_j_from_i (RGB-timestamp poses), scored on the same visible pixels."""
     m2_floor: ErrorSummary
     """M2 with GT_j as frame j's raw prediction and GT_i as the anchor."""
     m1: ErrorSummary | None
@@ -66,9 +68,18 @@ class PixelSetMetrics:
 
 
 @dataclass(frozen=True)
+class PairMaps:
+    m2: np.ndarray | None
+    """Per-pixel M2 relative error (not x100), NaN where not scored; None without predictions."""
+    anchor_depth: np.ndarray | None
+    """Frame i's GT-aligned prediction warped into j, NaN where not hit; None without predictions."""
+
+
+@dataclass(frozen=True)
 class PairConsistency:
     visible: PixelSetMetrics
     interior: PixelSetMetrics
+    maps: PairMaps | None = None
 
     @property
     def visible_fraction(self) -> float:
@@ -106,37 +117,51 @@ def visibility(
 
 def pair_consistency(
     frame_i: FrameInputs, frame_j: FrameInputs, K: np.ndarray, T_j_from_i: np.ndarray,
-    T_gt_j_from_i: np.ndarray | None = None,
+    T_gt_j_from_i: np.ndarray | None = None, keep_maps: bool = False,
 ) -> PairConsistency:
-    """T_j_from_i drives M1, M2 and the M2 floor; T_gt_j_from_i (default T_j_from_i) drives visibility and the GT floor."""
+    """T_j_from_i drives M1, M2, the M2 floor and gt_floor_rgb; T_gt_j_from_i (default T_j_from_i) drives
+    visibility and the GT floor."""
     vis = visibility(frame_i, frame_j, K, T_j_from_i if T_gt_j_from_i is None else T_gt_j_from_i)
     gt_j = frame_j.gt_depth.astype(np.float64)
+    if T_gt_j_from_i is None:
+        rgb_warped, rgb_scored = vis.warped_gt, vis.visible
+    else:
+        rgb_warped, rgb_hit = warp_depth(frame_i.gt_depth, frame_i.gt_valid, K, T_j_from_i, gt_j.shape)
+        rgb_scored = vis.visible & rgb_hit
+    m2_floor, m2_floor_scored, _ = _m2(frame_i.gt_depth, frame_i.gt_valid, frame_j.gt_depth, vis.visible, K,
+                                       T_j_from_i)
     metrics = {
         "gt_floor": (_relative(vis.warped_gt, gt_j, vis.visible), vis.visible),
-        "m2_floor": _m2(frame_i.gt_depth, frame_i.gt_valid, frame_j.gt_depth, vis.visible, K, T_j_from_i),
+        "gt_floor_rgb": (_relative(rgb_warped, gt_j, rgb_scored), rgb_scored),
+        "m2_floor": (m2_floor, m2_floor_scored),
     }
+    maps = PairMaps(None, None) if keep_maps else None
     if frame_i.aligned_depth is not None:
         if frame_j.aligned_depth is None or frame_j.raw_depth is None:
             raise ValueError("frame i has a prediction but frame j does not")
-        anchor, anchor_hit = warp_depth(frame_i.aligned_depth, frame_i.gt_valid, K, T_j_from_i, gt_j.shape)
-        scored = vis.visible & anchor_hit
+        m2, scored, anchor = _m2(frame_i.aligned_depth, frame_i.gt_valid, frame_j.raw_depth, vis.visible, K,
+                                 T_j_from_i)
         metrics["m1"] = (_relative(anchor, frame_j.aligned_depth, scored, denominator=gt_j), scored)
-        metrics["m2"] = _m2(frame_i.aligned_depth, frame_i.gt_valid, frame_j.raw_depth, vis.visible, K, T_j_from_i)
+        metrics["m2"] = (m2, scored)
+        if keep_maps:
+            maps = PairMaps(m2, np.where(anchor > 0, anchor, np.nan))
     valid_count = int(frame_j.gt_valid.sum())
     return PairConsistency(
         visible=_pixel_set(vis.visible, valid_count, gt_j, metrics),
         interior=_pixel_set(vis.interior, valid_count, gt_j, metrics),
+        maps=maps,
     )
 
 
 def _m2(
     anchor_depth_i: np.ndarray, valid_i: np.ndarray, raw_depth_j: np.ndarray, visible: np.ndarray,
     K: np.ndarray, T_j_from_i: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(error map, scored mask, anchor depth warped into j with 0 where not hit)."""
     anchor, anchor_hit = warp_depth(anchor_depth_i, valid_i, K, T_j_from_i, visible.shape)
     scored = visible & anchor_hit
     anchor = anchor.astype(np.float64)
-    return _relative(_align_to_anchor(raw_depth_j, anchor, scored), anchor, scored), scored
+    return _relative(_align_to_anchor(raw_depth_j, anchor, scored), anchor, scored), scored, anchor
 
 
 def _relative(

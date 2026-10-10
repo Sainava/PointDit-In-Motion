@@ -87,3 +87,5 @@ Dataset score = plain mean of per-image values, ×100 (`engine.py:790-796`, `:14
 - edge_density is computed from GT and includes hole boundaries, so it partly reflects GT quality around edges.
 
 - Upstream's exact L1 alignment compares every subsampled pixel with every other: at 4,096 pixels a single point-alignment fit builds 4,096 × 4,096 × 3 arrays (~3.5 GB peak per M1 frame, ~1 GB per M2 fit). This caused two kernel panics (watchdog timeouts from memory thrashing) on the 8 GB development Mac. The code asserts that no fit receives more than 4,096 pixels; full consistency runs happen on Kaggle, and local runs are limited to tests and small samples, single process, 2 threads.
+
+- gt_floor_rgb (GT floor with RGB-timestamp poses) is scored on the same visible pixels as all other metrics (visibility from depth-timestamp poses), so the two GT floors are compared pixel for pixel. It therefore differs slightly from a sweep run entirely with RGB-timestamp poses.

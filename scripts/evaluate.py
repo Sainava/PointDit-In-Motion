@@ -7,12 +7,10 @@ import csv
 import json
 import multiprocessing
 import os
-import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -27,6 +25,9 @@ from pim.evaluation import (  # noqa: E402
 )
 from pim.metrics.geometry import MIN_VALID_PIXELS  # noqa: E402
 from pim.paths import FORK_DIR, REPO_ROOT  # noqa: E402
+from pim.runs import (  # noqa: E402
+    available_cpus, check_window, git_commit, now, read_run, select_sequences,
+)
 
 PROTOCOL = {
     "mask": "GT depth > 0 only; the prediction's sky mask is not applied (pred_valid=None), as upstream",
@@ -50,64 +51,18 @@ class SequenceResult:
     seconds: float
 
 
-def now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def git_commit(repo: Path) -> dict[str, Any]:
-    def git(*args: str) -> str:
-        done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
-        if done.returncode != 0:
-            raise RuntimeError(f"git {' '.join(args)} failed in {repo}: {done.stderr.strip()}")
-        return done.stdout.strip()
-
-    return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
-
-
-def read_run(run_dir: Path) -> dict[str, Any]:
-    path = run_dir / "run.json"
-    if not path.is_file():
-        raise FileNotFoundError(f"{path} not found; --predictions must be a run directory written by predict.py")
-    return json.loads(path.read_text())
-
-
-def select_sequences(run: dict[str, Any], sequences_config: Path, requested: list[str] | None) -> list[str]:
-    predicted = list(run.get("sequences") or {})
-    if not predicted:
-        raise ValueError("run.json lists no predicted sequences")
-    known = list((yaml.safe_load(sequences_config.read_text()) or {}).get("sequences") or {})
-    unknown = [name for name in predicted if name not in known]
-    if unknown:
-        raise ValueError(f"run.json sequences {unknown} are not in {sequences_config}")
-    if requested is None:
-        return [name for name in known if name in predicted]
-    missing = [name for name in requested if name not in predicted]
-    if missing:
-        raise ValueError(f"sequences {missing} were not predicted in this run; run.json has {predicted}")
-    if len(set(requested)) != len(requested):
-        raise ValueError(f"--sequences lists a sequence twice: {requested}")
-    return requested
-
-
 def sequence_tasks(
     name: str, run: dict[str, Any], run_dir: Path, data_root: Path, sequences_config: Path
 ) -> list[FrameTask]:
     sequence = load_sequence(data_root / name, sequences_config)
     frames = apply_window(sequence)
-    window = {"start": frames[0].index, "count": len(frames)}
-    if run["sequences"][name]["window"] != window:
-        raise ValueError(f"{name}: predictions cover window {run['sequences'][name]['window']}, "
-                         f"but {sequences_config} now gives {window}")
+    check_window(name, run, frames, sequences_config)
     return build_tasks(name, sequence.root, sequence.K, frames, run_dir)
 
 
 def check_predictions(tasks: list[FrameTask]) -> None:
     for task in tasks:
         check_rgb_file(task.prediction, task.frame, task.sequence_root)
-
-
-def available_cpus() -> int:
-    return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
 
 
 def evaluate_tasks(tasks: list[FrameTask], workers: int) -> Iterator[dict[str, Any]]:
