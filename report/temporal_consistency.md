@@ -7,3 +7,23 @@
 - GT-only sweep over the 300-frame windows (depth-timestamp poses), median of per-pair medians ×100: GT floor 0.26–0.41 on fr3 and 0.32–1.34 on fr1, growing with time gap; M2 floor at or below the GT floor, except near-ties on fr1_room at 33/100 ms.
 - 20-frame prediction samples (first look, not representative): on fr3, M1 is ~2–3× the GT floor and M2 ~2× the M2 floor at all gaps; on fr1_360 frames 0–19, M2 is slightly above the M2 floor at 33 and 100 ms and below it at 333 ms (only 10 pairs).
 - The comparison of GT floors computed with depth- vs RGB-timestamp poses is deferred to the full Kaggle run.
+
+## Full evaluation (all 1,200 frames; 33 / 100 / 333 ms gaps)
+
+Results: `results/consistency/baseline/` (summary.csv, pairs_*.csv, consistency.json). Kaggle CPU, ~2.4 h, peak ~2.4 GB per worker. Regression check against the development values: 114/114 within 1e-3, pair counts exact.
+
+Median over pairs of each pair's median relative depth error ×100, visible pixels:
+
+| Sequence | Gap (ms) | GT floor (depth poses) | GT floor (RGB poses) | M1 | M2 floor | M2 | M2 / M2 floor |
+|---|---|---|---|---|---|---|---|
+| fr1_desk | 33 / 100 / 333 | 0.39 / 0.51 / 0.96 | 0.46 / 0.62 / 1.25 | 0.79 / 1.05 / 2.05 | 0.34 / 0.45 / 0.62 | 0.48 / 0.72 / 1.24 | 1.42 / 1.51 / 1.80 |
+| fr1_room | 33 / 100 / 333 | 0.32 / 0.46 / 0.78 | 0.35 / 0.53 / 0.99 | 0.82 / 1.07 / 2.02 | 0.33 / 0.46 / 0.69 | 0.61 / 0.76 / 1.20 | 1.64 / 1.59 / 1.57 |
+| fr1_360 | 33 / 100 / 333 | 0.40 / 0.63 / 1.34 | 0.39 / 0.64 / 1.36 | 0.78 / 1.24 / 2.58 | 0.37 / 0.49 / 0.71 | 0.56 / 0.91 / 1.64 | 1.50 / 1.77 / 1.92 |
+| fr3_long_office | 33 / 100 / 333 | 0.26 / 0.30 / 0.41 | 0.26 / 0.30 / 0.41 | 0.44 / 0.57 / 1.05 | 0.25 / 0.28 / 0.36 | 0.34 / 0.46 / 0.65 | 1.34 / 1.50 / 1.70 |
+
+**Findings.**
+- PointDiT's frame-to-frame inconsistency (M2) exceeds its floor in every sequence at every gap (1.3–1.9×); M1 exceeds the GT floor by 1.6–2.8×.
+- The excess grows with time gap in three of four sequences (largest on fr1_360, 1.92× at 333 ms): predicted geometry is partly view-dependent.
+- Frame-to-frame disagreement (~0.3–0.6% at 33 ms) is far smaller than per-frame error (~4–6% Rel_d), so most error is persistent across nearby viewpoints rather than flicker. To be confirmed with like-for-like statistics (per-frame median vs per-pair median).
+- GT floor timing: RGB-timestamp poses raise the floor on fr1_desk (+19% / +30% at 33 / 333 ms) and fr1_room (+7% / +27%), but not on fr1_360 or fr3, which have small depth offsets. Depth-timestamp poses are used for the GT floor.
+- Interquartile ranges are of the same size as the medians: a minority of pairs are much less consistent than typical. Drivers to be analysed.
