@@ -27,3 +27,17 @@ Median over pairs of each pair's median relative depth error ×100, visible pixe
 - Frame-to-frame disagreement (~0.3–0.6% at 33 ms) is far smaller than per-frame error (~4–6% Rel_d), so most error is persistent across nearby viewpoints rather than flicker. To be confirmed with like-for-like statistics (per-frame median vs per-pair median).
 - GT floor timing: RGB-timestamp poses raise the floor on fr1_desk (+19% / +30% at 33 / 333 ms) and fr1_room (+7% / +27%), but not on fr1_360 or fr3, which have small depth offsets. Depth-timestamp poses are used for the GT floor.
 - Interquartile ranges are of the same size as the medians: a minority of pairs are much less consistent than typical. Drivers to be analysed.
+
+## Sampling noise vs zero initialisation
+
+Subsets: fr1_360 frames 200–299, fr3_long_office_household 740–839. Runs: zero init (default) and noise init with three seeds (per-frame seeds, reproducible). Results: `results/sampling/`.
+
+**Validation.** The zero-init rerun reproduced the cached baseline exactly (200/200 frames, max difference 0); zero-init consistency on the subsets matched the full baseline run exactly (0 failures).
+
+**Findings.**
+- Noise init increases frame-to-frame inconsistency (M2) at 33 ms by 10–22% on fr1_360 and 14–18% on fr3 (most CIs exclude no change); by ~4–9% at 100 ms (significant on fr3 only); not at 333 ms (ratios 0.98–1.02). Sampling noise adds short-term flicker; at larger gaps, view-dependent inconsistency dominates.
+- Same-frame disagreement between noise seeds is ~0.27–0.33% (median per pixel), 40–70% of the zero-init frame-to-frame inconsistency at 33 ms (0.66% fr1_360, 0.42% fr3 on these subsets).
+- Accuracy is essentially unchanged: noise minus zeros in per-frame Rel_d is +0.01 to +0.04 points (baseline 4–7%); on fr3 noise is very slightly worse (CIs exclude zero).
+- Zero init vs a noise seed (~0.21–0.26) disagrees less than seed vs seed (~0.27–0.33), by about √2, consistent with the zero-init prediction lying near the centre of the noisy predictions.
+
+**Conclusion.** For moving-camera use, deterministic zero initialisation reduces short-term flicker at no accuracy cost.
