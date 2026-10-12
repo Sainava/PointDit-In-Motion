@@ -1,0 +1,471 @@
+{
+  "runs": {
+    "zeros_rerun": {
+      "dir": "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/zeros_rerun",
+      "run": {
+        "name": "zeros_rerun",
+        "config": {
+          "name": "zeros_rerun",
+          "inference": {
+            "init": "zeros",
+            "seed": null
+          }
+        },
+        "start_time": "2026-10-12T14:57:11+00:00",
+        "end_time": "2026-10-12T15:04:13+00:00",
+        "frames_predicted": 200,
+        "frames_skipped": 0,
+        "sequences": {
+          "rgbd_dataset_freiburg1_360": {
+            "window": {
+              "start": 0,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1745.260721039997,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "e2c9b3b9",
+            "end_time": "2026-10-12T15:00:58+00:00"
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "window": {
+              "start": 637,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1737.936872730015,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "e2c9b3b9",
+            "end_time": "2026-10-12T15:04:13+00:00"
+          }
+        },
+        "invocations": [
+          {
+            "id": "e2c9b3b9",
+            "host": "f4f61114228b",
+            "device": "cuda:0",
+            "cuda_visible_devices": "1",
+            "gpu": "Tesla T4",
+            "torch": "2.11.0+cu128",
+            "cuda": "12.8",
+            "commits": {
+              "project": {
+                "commit": "7bb32c97e8e5d628764b777a65d9a546c650d707",
+                "dirty": false
+              },
+              "pointdit": {
+                "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+                "dirty": false
+              },
+              "dinov3": {
+                "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+                "dirty": false
+              }
+            },
+            "start_time": "2026-10-12T14:57:11+00:00",
+            "end_time": "2026-10-12T15:04:13+00:00",
+            "sequences": {
+              "rgbd_dataset_freiburg1_360": {
+                "predicted": 100,
+                "skipped": 0
+              },
+              "rgbd_dataset_freiburg3_long_office_household": {
+                "predicted": 100,
+                "skipped": 0
+              }
+            }
+          }
+        ],
+        "subsets": {
+          "rgbd_dataset_freiburg1_360": {
+            "first": 200,
+            "last": 299
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "first": 740,
+            "last": 839
+          }
+        }
+      }
+    },
+    "noise_seed0": {
+      "dir": "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/noise_seed0",
+      "run": {
+        "name": "noise_seed0",
+        "config": {
+          "name": "noise_seed0",
+          "inference": {
+            "init": "noise",
+            "seed": 0,
+            "seed_mode": "per_frame"
+          }
+        },
+        "start_time": "2026-10-12T14:50:21+00:00",
+        "end_time": "2026-10-12T14:56:59+00:00",
+        "frames_predicted": 200,
+        "frames_skipped": 0,
+        "sequences": {
+          "rgbd_dataset_freiburg1_360": {
+            "window": {
+              "start": 0,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1627.0957971699984,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "d378ebb0",
+            "end_time": "2026-10-12T14:53:56+00:00"
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "window": {
+              "start": 637,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1639.5672431000037,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "d378ebb0",
+            "end_time": "2026-10-12T14:56:59+00:00"
+          }
+        },
+        "invocations": [
+          {
+            "id": "d378ebb0",
+            "host": "f4f61114228b",
+            "device": "cuda:0",
+            "cuda_visible_devices": "0",
+            "gpu": "Tesla T4",
+            "torch": "2.11.0+cu128",
+            "cuda": "12.8",
+            "commits": {
+              "project": {
+                "commit": "7bb32c97e8e5d628764b777a65d9a546c650d707",
+                "dirty": false
+              },
+              "pointdit": {
+                "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+                "dirty": false
+              },
+              "dinov3": {
+                "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+                "dirty": false
+              }
+            },
+            "start_time": "2026-10-12T14:50:21+00:00",
+            "end_time": "2026-10-12T14:56:59+00:00",
+            "sequences": {
+              "rgbd_dataset_freiburg1_360": {
+                "predicted": 100,
+                "skipped": 0
+              },
+              "rgbd_dataset_freiburg3_long_office_household": {
+                "predicted": 100,
+                "skipped": 0
+              }
+            }
+          }
+        ],
+        "subsets": {
+          "rgbd_dataset_freiburg1_360": {
+            "first": 200,
+            "last": 299
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "first": 740,
+            "last": 839
+          }
+        }
+      }
+    },
+    "noise_seed1": {
+      "dir": "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/noise_seed1",
+      "run": {
+        "name": "noise_seed1",
+        "config": {
+          "name": "noise_seed1",
+          "inference": {
+            "init": "noise",
+            "seed": 1,
+            "seed_mode": "per_frame"
+          }
+        },
+        "start_time": "2026-10-12T14:57:08+00:00",
+        "end_time": "2026-10-12T15:03:46+00:00",
+        "frames_predicted": 200,
+        "frames_skipped": 0,
+        "sequences": {
+          "rgbd_dataset_freiburg1_360": {
+            "window": {
+              "start": 0,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1620.448183079989,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "dec63440",
+            "end_time": "2026-10-12T15:00:43+00:00"
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "window": {
+              "start": 637,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1622.1037246799935,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "dec63440",
+            "end_time": "2026-10-12T15:03:46+00:00"
+          }
+        },
+        "invocations": [
+          {
+            "id": "dec63440",
+            "host": "f4f61114228b",
+            "device": "cuda:0",
+            "cuda_visible_devices": "0",
+            "gpu": "Tesla T4",
+            "torch": "2.11.0+cu128",
+            "cuda": "12.8",
+            "commits": {
+              "project": {
+                "commit": "7bb32c97e8e5d628764b777a65d9a546c650d707",
+                "dirty": false
+              },
+              "pointdit": {
+                "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+                "dirty": false
+              },
+              "dinov3": {
+                "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+                "dirty": false
+              }
+            },
+            "start_time": "2026-10-12T14:57:08+00:00",
+            "end_time": "2026-10-12T15:03:46+00:00",
+            "sequences": {
+              "rgbd_dataset_freiburg1_360": {
+                "predicted": 100,
+                "skipped": 0
+              },
+              "rgbd_dataset_freiburg3_long_office_household": {
+                "predicted": 100,
+                "skipped": 0
+              }
+            }
+          }
+        ],
+        "subsets": {
+          "rgbd_dataset_freiburg1_360": {
+            "first": 200,
+            "last": 299
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "first": 740,
+            "last": 839
+          }
+        }
+      }
+    },
+    "noise_seed2": {
+      "dir": "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/noise_seed2",
+      "run": {
+        "name": "noise_seed2",
+        "config": {
+          "name": "noise_seed2",
+          "inference": {
+            "init": "noise",
+            "seed": 2,
+            "seed_mode": "per_frame"
+          }
+        },
+        "start_time": "2026-10-12T14:50:21+00:00",
+        "end_time": "2026-10-12T14:57:06+00:00",
+        "frames_predicted": 200,
+        "frames_skipped": 0,
+        "sequences": {
+          "rgbd_dataset_freiburg1_360": {
+            "window": {
+              "start": 0,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1601.5941111800005,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "bee6cacb",
+            "end_time": "2026-10-12T14:53:54+00:00"
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "window": {
+              "start": 637,
+              "count": 300
+            },
+            "frames": 100,
+            "mean_latency_ms": 1732.6719447000066,
+            "peak_mem_gb": 3.9929847717285156,
+            "invocation": "bee6cacb",
+            "end_time": "2026-10-12T14:57:06+00:00"
+          }
+        },
+        "invocations": [
+          {
+            "id": "bee6cacb",
+            "host": "f4f61114228b",
+            "device": "cuda:0",
+            "cuda_visible_devices": "1",
+            "gpu": "Tesla T4",
+            "torch": "2.11.0+cu128",
+            "cuda": "12.8",
+            "commits": {
+              "project": {
+                "commit": "7bb32c97e8e5d628764b777a65d9a546c650d707",
+                "dirty": false
+              },
+              "pointdit": {
+                "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+                "dirty": false
+              },
+              "dinov3": {
+                "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+                "dirty": false
+              }
+            },
+            "start_time": "2026-10-12T14:50:21+00:00",
+            "end_time": "2026-10-12T14:57:06+00:00",
+            "sequences": {
+              "rgbd_dataset_freiburg1_360": {
+                "predicted": 100,
+                "skipped": 0
+              },
+              "rgbd_dataset_freiburg3_long_office_household": {
+                "predicted": 100,
+                "skipped": 0
+              }
+            }
+          }
+        ],
+        "subsets": {
+          "rgbd_dataset_freiburg1_360": {
+            "first": 200,
+            "last": 299
+          },
+          "rgbd_dataset_freiburg3_long_office_household": {
+            "first": 740,
+            "last": 839
+          }
+        }
+      }
+    }
+  },
+  "commits": {
+    "project": {
+      "commit": "7bb32c97e8e5d628764b777a65d9a546c650d707",
+      "dirty": false
+    },
+    "pointdit": {
+      "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+      "dirty": false
+    }
+  },
+  "arguments": {
+    "noise": [
+      "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/noise_seed0",
+      "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/noise_seed1",
+      "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/noise_seed2"
+    ],
+    "zeros": "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/zeros_rerun",
+    "eval_root": "/kaggle/working/sampling/eval",
+    "consistency_root": "/kaggle/working/sampling/consistency",
+    "baseline_consistency": "/kaggle/working/Pointdit-In-Motion/results/consistency/baseline",
+    "subsets": "/kaggle/working/Pointdit-In-Motion/configs/sampling_subsets.yaml",
+    "data_root": "/kaggle/input/datasets/sainavamodak/pointdit-tum-rgb-d-subset/tum-rgbd-four-sequences",
+    "sequences_config": "/kaggle/working/Pointdit-In-Motion/configs/sequences.yaml",
+    "out": "/kaggle/working/sampling",
+    "workers": 4,
+    "threads": 1
+  },
+  "subsets": {
+    "rgbd_dataset_freiburg1_360": {
+      "first": 200,
+      "last": 299
+    },
+    "rgbd_dataset_freiburg3_long_office_household": {
+      "first": 740,
+      "last": 839
+    }
+  },
+  "sequences_config": {
+    "cameras": {
+      "ros_default": {
+        "fx": 525.0,
+        "fy": 525.0,
+        "cx": 319.5,
+        "cy": 239.5
+      },
+      "freiburg3": {
+        "fx": 535.4,
+        "fy": 539.2,
+        "cx": 320.1,
+        "cy": 247.6
+      }
+    },
+    "sequences": {
+      "rgbd_dataset_freiburg1_desk": {
+        "camera": "ros_default",
+        "window": {
+          "start": 209,
+          "count": 300
+        }
+      },
+      "rgbd_dataset_freiburg1_room": {
+        "camera": "ros_default",
+        "window": {
+          "start": 366,
+          "count": 300
+        }
+      },
+      "rgbd_dataset_freiburg1_360": {
+        "camera": "ros_default",
+        "window": {
+          "start": 0,
+          "count": 300
+        }
+      },
+      "rgbd_dataset_freiburg3_long_office_household": {
+        "camera": "freiburg3",
+        "window": {
+          "start": 637,
+          "count": 300
+        }
+      }
+    }
+  },
+  "protocol": {
+    "seed_disagreement": "per frame, the reference prediction's depth aligned to GT by upstream compute_metrics (as the M1/M2 anchor), and the other prediction's raw z fitted to it with align_depth_affine (scale + shift, weights 1/reference, 64x64 masked nearest subsample), as M2 fits frame j; relative difference |aligned - reference| / reference x100 over pixels valid in both predictions, GT-valid and with positive reference depth",
+    "accuracy": "evaluate.py per-frame rel_d, rel_p, delta1_d; per-frame difference config - zeros",
+    "consistency": "consistency_eval.py visible-pixel per-pair medians; median over pairs per gap",
+    "bootstrap": "moving-block bootstrap over frames (accuracy, disagreement) or pairs ordered by frame i (consistency), block 15, 2000 resamples, seed 0, 95% percentile CI; M2 ratio resamples both configs' pairs jointly",
+    "regression": "zero-init pairs on the subsets vs the same pairs of the full baseline run, every metric column within 0.001"
+  },
+  "regression": {
+    "tolerance": 0.001,
+    "sequences": [
+      {
+        "sequence": "rgbd_dataset_freiburg1_360",
+        "pairs": 286,
+        "baseline_pairs": 286,
+        "max_abs_diff": 0.0,
+        "failures": 0
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg3_long_office_household",
+        "pairs": 275,
+        "baseline_pairs": 275,
+        "max_abs_diff": 0.0,
+        "failures": 0
+      }
+    ]
+  },
+  "start_time": "2026-10-12T17:55:33+00:00",
+  "end_time": "2026-10-12T18:41:48+00:00",
+  "seconds": 2774.2
+}
