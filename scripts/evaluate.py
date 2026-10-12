@@ -28,6 +28,9 @@ from pim.paths import FORK_DIR, REPO_ROOT  # noqa: E402
 from pim.runs import (  # noqa: E402
     available_cpus, check_window, git_commit, now, read_run, select_sequences,
 )
+from pim.subsets import (  # noqa: E402
+    FrameRange, Subsets, check_inside_window, check_run_covers, load_subsets, subset_sequences, subsets_record,
+)
 
 PROTOCOL = {
     "mask": "GT depth > 0 only; the prediction's sky mask is not applied (pred_valid=None), as upstream",
@@ -52,12 +55,18 @@ class SequenceResult:
 
 
 def sequence_tasks(
-    name: str, run: dict[str, Any], run_dir: Path, data_root: Path, sequences_config: Path
+    name: str, run: dict[str, Any], run_dir: Path, data_root: Path, sequences_config: Path,
+    frame_range: FrameRange | None = None,
 ) -> list[FrameTask]:
     sequence = load_sequence(data_root / name, sequences_config)
     frames = apply_window(sequence)
     check_window(name, run, frames, sequences_config)
-    return build_tasks(name, sequence.root, sequence.K, frames, run_dir)
+    # Tasks are built on the whole window so gap_ms of a subset's first frame still refers to its predecessor.
+    tasks = build_tasks(name, sequence.root, sequence.K, frames, run_dir)
+    if frame_range is None:
+        return tasks
+    check_inside_window(name, frames, frame_range)
+    return [t for t in tasks if frame_range.contains(t.frame.index)]
 
 
 def check_predictions(tasks: list[FrameTask]) -> None:
@@ -81,16 +90,20 @@ def evaluate_tasks(tasks: list[FrameTask], workers: int) -> Iterator[dict[str, A
 
 
 def run_evaluation(
-    run_dir: Path, data_root: Path, sequences_config: Path, requested: list[str] | None, out: Path, workers: int
+    run_dir: Path, data_root: Path, sequences_config: Path, requested: list[str] | None, out: Path, workers: int,
+    subsets: Subsets | None = None,
 ) -> dict[str, Any]:
     if workers < 1:
         raise ValueError(f"--workers must be at least 1, got {workers}")
     if not data_root.is_dir():
         raise FileNotFoundError(f"data root {data_root} does not exist")
     run = read_run(run_dir)
+    check_run_covers(run, subsets)
     start_time = now()
-    names = select_sequences(run, sequences_config, requested)
-    tasks = {name: sequence_tasks(name, run, run_dir, data_root, sequences_config) for name in names}
+    names = select_sequences(run, sequences_config,
+                             requested if subsets is None else subset_sequences(subsets, requested))
+    tasks = {name: sequence_tasks(name, run, run_dir, data_root, sequences_config,
+                                  None if subsets is None else subsets[name]) for name in names}
     for sequence_list in tasks.values():
         check_predictions(sequence_list)
 
@@ -120,6 +133,8 @@ def run_evaluation(
     os.replace(partial, out / "per_frame.csv")
 
     record = eval_record(run, run_dir, data_root, sequences_config, workers, results, start_time)
+    if subsets is not None:
+        record["subsets"] = subsets_record(subsets)
     (out / "eval.json").write_text(json.dumps(record, indent=2) + "\n")
     print_summary(rows)
     print(f"{record['seconds_per_frame']:.2f} s/frame overall; wrote {out / 'per_frame.csv'} and {out / 'eval.json'}")
@@ -173,8 +188,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=1,
                         help="worker processes; the CPUs are split between them and each needs ~3.5 GB of RAM")
+    parser.add_argument("--subsets", type=Path,
+                        help="YAML of inclusive frame ranges per sequence; evaluate only those frames")
     args = parser.parse_args()
-    run_evaluation(args.predictions, args.data_root, args.sequences_config, args.sequences, args.out, args.workers)
+    run_evaluation(args.predictions, args.data_root, args.sequences_config, args.sequences, args.out, args.workers,
+                   load_subsets(args.subsets) if args.subsets else None)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from pim.consistency.metrics import ErrorSummary, FrameInputs, PairConsistency, 
 from pim.consistency.warp import depth_pose, pairs_by_gap, relative_pose
 from pim.data.tum import Frame, TUMSequence, apply_window, load_sequence, read_groundtruth
 from pim.evaluation import load_prediction, prediction_path, set_torch_threads
+from pim.subsets import FrameRange
 
 PAIR_TOLERANCE_MS = 10.0
 MAPS_GAP_MS = 33.0
@@ -61,6 +62,8 @@ class SequenceJob:
     out: Path
     save_maps: bool
     threads: int
+    frame_range: FrameRange | None = None
+    """Keep only pairs with both frames inside this range; pairing itself still runs over the whole window."""
 
 
 @dataclass(frozen=True)
@@ -107,9 +110,15 @@ class FrameStore:
                 self._inputs.pop(frame.index, None)
 
 
-def plan_pairs(frames: Sequence[Frame], gaps_ms: Sequence[float]) -> list[PairTask]:
-    """Pairs in output order: by gap, then by frame i."""
-    return [PairTask(gap, i, j) for gap in gaps_ms for i, j in pairs_by_gap(frames, gap, PAIR_TOLERANCE_MS)]
+def plan_pairs(
+    frames: Sequence[Frame], gaps_ms: Sequence[float], frame_range: FrameRange | None = None
+) -> list[PairTask]:
+    """Pairs in output order: by gap, then by frame i. With frame_range, the pairs of the whole window whose two
+    frames both lie inside it, so they are exactly the corresponding rows of a whole-window run."""
+    pairs = [PairTask(gap, i, j) for gap in gaps_ms for i, j in pairs_by_gap(frames, gap, PAIR_TOLERANCE_MS)]
+    if frame_range is None:
+        return pairs
+    return [p for p in pairs if frame_range.contains(p.frame_i.index) and frame_range.contains(p.frame_j.index)]
 
 
 def evaluation_order(pairs: Sequence[PairTask]) -> list[PairTask]:
@@ -157,7 +166,7 @@ def evaluate_sequence(job: SequenceJob, compute: Callable[..., PairConsistency] 
     started = time.perf_counter()
     set_torch_threads(job.threads)
     sequence, frames = load_window(job)
-    pairs = plan_pairs(frames, job.gaps_ms)
+    pairs = plan_pairs(frames, job.gaps_ms, job.frame_range)
     if not pairs:
         raise ValueError(f"{job.name}: no frame pairs at gaps {job.gaps_ms} ms")
     gt_trajectory = read_groundtruth(sequence.root)

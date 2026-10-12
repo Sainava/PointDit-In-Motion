@@ -17,6 +17,7 @@ from pim.consistency.evaluation import (
 )
 from pim.data.tum import Frame
 from pim.metrics.geometry import backproject
+from pim.subsets import FrameRange
 
 
 def load_script(name: str):
@@ -339,3 +340,124 @@ def test_save_maps_requires_the_33_ms_gap(setup, tmp_path: Path) -> None:
 def test_pair_task_key_identifies_gap_and_frames() -> None:
     a, b = frames([0.0, 0.033])
     assert PairTask(33.0, a, b).key == (33.0, 0, 1)
+
+
+sampling_compare = load_script("sampling_compare")
+SUBSET = {"seq_a": FrameRange(1, 5)}
+
+
+def in_subset(row: dict[str, str]) -> bool:
+    return SUBSET["seq_a"].contains(int(row["frame_i"])) and SUBSET["seq_a"].contains(int(row["frame_j"]))
+
+
+@pytest.fixture(scope="module")
+def subset_run(setup, tmp_path_factory) -> Path:
+    out = tmp_path_factory.mktemp("subset")
+    subsets = out.parent / "subsets.yaml"
+    subsets.write_text("subsets:\n  seq_a: {first: 1, last: 5}\n")
+    assert consistency_eval.run_consistency(args_for(setup, out, "--subsets", str(subsets)))
+    return out
+
+
+def test_subsets_keep_exactly_the_whole_window_pairs_inside_them(single_run: Path, subset_run: Path) -> None:
+    full = read_pairs(single_run / "pairs_seq_a.csv")
+    rows = read_pairs(subset_run / "pairs_seq_a.csv")
+
+    assert rows == [r for r in full if in_subset(r)]
+    assert 0 < len(rows) < len(full)
+    assert not (subset_run / "pairs_seq_b.csv").exists()
+    assert json.loads((subset_run / "consistency.json").read_text())["subsets"] == {"seq_a": {"first": 1, "last": 5}}
+    assert "subsets" not in json.loads((single_run / "consistency.json").read_text())
+
+
+def test_subset_regression_against_the_whole_window_run_passes(single_run: Path, subset_run: Path) -> None:
+    rows = {"seq_a": read_pairs(subset_run / "pairs_seq_a.csv")}
+
+    table, failures = sampling_compare.regression(rows, single_run, SUBSET)
+
+    assert failures == []
+    assert table[0]["pairs"] == table[0]["baseline_pairs"] == len(rows["seq_a"])
+    assert table[0]["max_abs_diff"] == 0.0
+
+
+def test_subset_regression_fails_on_a_perturbed_value_or_a_missing_pair(single_run: Path, subset_run: Path) -> None:
+    rows = read_pairs(subset_run / "pairs_seq_a.csv")
+    scored = next(k for k, r in enumerate(rows) if r["m2_visible_median"])
+    perturbed = [dict(r) for r in rows]
+    perturbed[scored]["m2_visible_median"] = repr(float(rows[scored]["m2_visible_median"]) + 0.002)
+    within = [dict(r) for r in rows]
+    within[scored]["m2_visible_median"] = repr(float(rows[scored]["m2_visible_median"]) + 0.0005)
+
+    _, failures = sampling_compare.regression({"seq_a": perturbed}, single_run, SUBSET)
+    assert len(failures) == 1 and "m2_visible_median" in failures[0]
+    _, failures = sampling_compare.regression({"seq_a": rows[1:]}, single_run, SUBSET)
+    assert len(failures) == 1 and "missing" in failures[0]
+    _, failures = sampling_compare.regression({"seq_a": within}, single_run, SUBSET)
+    assert failures == []
+
+
+def write_sampling_run(root: Path, name: str, init: str, seed: int | None, scale: float) -> Path:
+    run_dir = root / name
+    for sequence in SEQUENCES[:1]:
+        (run_dir / sequence).mkdir(parents=True)
+        for i in range(1, 6):
+            depth = depth_image(i).astype(np.float32)
+            gt_points, _ = backproject(depth, depth > 0, K)
+            # Seeds differ from write_predictions', so no run here equals the module's baseline predictions.
+            noise = 0.01 * np.random.default_rng(1000 + (-1 if seed is None else seed) * 100 + i).standard_normal(
+                gt_points.shape)
+            points = scale * gt_points + np.array([0.1, -0.2, 0.3]) + noise
+            np.savez_compressed(run_dir / sequence / f"{i:05d}.npz", points=points.astype(np.float16),
+                                valid=np.ones((H, W), bool), rgb_file=np.str_(f"rgb/{i}.png"),
+                                latency_ms=np.float64(1.0), peak_mem_gb=np.float64(1.0))
+    window = {"start": 0, "count": len(SLOTS)}
+    run = {"name": name, "config": {"name": name, "inference": {"init": init, "seed": seed}},
+           "subsets": {"seq_a": {"first": 1, "last": 5}}, "sequences": {"seq_a": {"window": window, "frames": 5}}}
+    (run_dir / "run.json").write_text(json.dumps(run))
+    return run_dir
+
+
+def test_sampling_compare_end_to_end_on_a_tiny_subset(setup, single_run: Path, tmp_path: Path) -> None:
+    _, data_root, config = setup
+    subsets = tmp_path / "subsets.yaml"
+    subsets.write_text("subsets:\n  seq_a: {first: 1, last: 5}\n")
+    zeros = write_sampling_run(tmp_path / "predictions", "zeros_rerun", "zeros", None, 0.5)
+    noise = [write_sampling_run(tmp_path / "predictions", f"noise_seed{k}", "noise", k, 0.5 + 0.1 * k)
+             for k in range(2)]
+    evaluate = load_script("evaluate")
+    from pim.subsets import load_subsets
+
+    for run_dir in (zeros, *noise):
+        evaluate.run_evaluation(run_dir, data_root, config, None, tmp_path / "eval" / run_dir.name, 1,
+                                load_subsets(subsets))
+        assert consistency_eval.run_consistency(consistency_eval.parse_args([
+            "--predictions", str(run_dir), "--data-root", str(data_root), "--sequences-config", str(config),
+            "--out", str(tmp_path / "consistency" / run_dir.name), "--gaps-ms", *GAPS, "--subsets", str(subsets)]))
+    # The zero-init rerun predicts differently from the module's baseline, so check it against itself.
+    baseline = tmp_path / "consistency" / zeros.name
+    common = ["--noise", *map(str, noise), "--zeros", str(zeros), "--eval-root", str(tmp_path / "eval"),
+              "--consistency-root", str(tmp_path / "consistency"), "--subsets", str(subsets),
+              "--data-root", str(data_root), "--sequences-config", str(config)]
+
+    sampling_compare.main([*common, "--baseline-consistency", str(baseline), "--out", str(tmp_path / "out")])
+
+    out = tmp_path / "out"
+    with open(out / "seed_disagreement.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 5 * 3
+    assert {r["comparison"] for r in rows} == {"noise_seed0-noise_seed1", "zeros_rerun-noise_seed0",
+                                                "zeros_rerun-noise_seed1"}
+    assert all(float(r["median"]) > 0 for r in rows if int(r["frame_index"]) != SPARSE_FRAME)
+    with open(out / "consistency_summary.csv", newline="") as f:
+        consistency = list(csv.DictReader(f))
+    assert {(r["gap_ms"], r["config"]) for r in consistency} == {
+        (g, c) for g in GAPS for c in ("zeros_rerun", "noise_seed0", "noise_seed1")}
+    with open(out / "accuracy_summary.csv", newline="") as f:
+        assert len(list(csv.DictReader(f))) == 2 * 3
+    assert "## Seed disagreement" in (out / "summary.md").read_text()
+    record = json.loads((out / "sampling.json").read_text())
+    assert set(record["runs"]) == {"zeros_rerun", "noise_seed0", "noise_seed1"}
+    assert record["subsets"] == {"seq_a": {"first": 1, "last": 5}}
+
+    with pytest.raises(SystemExit, match="regression check failed"):
+        sampling_compare.main([*common, "--baseline-consistency", str(single_run), "--out", str(tmp_path / "bad")])

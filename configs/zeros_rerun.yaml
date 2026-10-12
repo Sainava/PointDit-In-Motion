@@ -1,0 +1,4 @@
+name: zeros_rerun
+inference:
+  init: zeros
+  seed: null

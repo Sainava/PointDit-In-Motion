@@ -161,7 +161,7 @@ def _m2(
     anchor, anchor_hit = warp_depth(anchor_depth_i, valid_i, K, T_j_from_i, visible.shape)
     scored = visible & anchor_hit
     anchor = anchor.astype(np.float64)
-    return _relative(_align_to_anchor(raw_depth_j, anchor, scored), anchor, scored), scored, anchor
+    return _relative(align_depth_to_anchor(raw_depth_j, anchor, scored), anchor, scored), scored, anchor
 
 
 def _relative(
@@ -173,7 +173,7 @@ def _relative(
     return error
 
 
-def _align_to_anchor(raw_depth: np.ndarray, anchor: np.ndarray, mask: np.ndarray) -> np.ndarray:
+def align_depth_to_anchor(raw_depth: np.ndarray, anchor: np.ndarray, mask: np.ndarray) -> np.ndarray:
     # M2 anchor: frame j's raw prediction is fitted to frame i's GT-aligned depth warped into j,
     # not to GT_j, so GT only fixes frame i's scale and shift.
     if mask.sum() < MIN_VISIBLE_PIXELS:

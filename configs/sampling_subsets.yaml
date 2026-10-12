@@ -1,0 +1,6 @@
+# Inclusive kept-frame index ranges inside each sequence's window in sequences.yaml.
+subsets:
+  # Fast rotation; includes the worst-frame cluster 233-243.
+  rgbd_dataset_freiburg1_360: {first: 200, last: 299}
+  # Slow; includes the flicker frames 758-776.
+  rgbd_dataset_freiburg3_long_office_household: {first: 740, last: 839}

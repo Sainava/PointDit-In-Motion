@@ -1,0 +1,6 @@
+name: noise_seed2
+inference:
+  init: noise
+  seed: 2
+  # Frame i starts from seed 2 * 1,000,000 + i: independent noise per frame, reproducible.
+  seed_mode: per_frame

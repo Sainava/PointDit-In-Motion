@@ -30,6 +30,9 @@ from pim.evaluation import check_rgb_file, prediction_path  # noqa: E402
 from pim.metrics.geometry import MAX_ALIGNMENT_PIXELS  # noqa: E402
 from pim.paths import FORK_DIR, REPO_ROOT  # noqa: E402
 from pim.runs import available_cpus, check_window, git_commit, now, read_run, select_sequences  # noqa: E402
+from pim.subsets import (  # noqa: E402
+    Subsets, check_inside_window, check_run_covers, load_subsets, subset_sequences, subsets_record,
+)
 
 DEFAULT_GAPS_MS = (33.0, 100.0, 333.0)
 EXPECTED = REPO_ROOT / "configs" / "consistency_expected.json"
@@ -100,6 +103,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--save-maps", nargs="+", default=[], metavar="SEQUENCE",
                         help=f"save per-pixel M2 maps at the {MAPS_GAP_MS:g} ms gap for these sequences")
     parser.add_argument("--expected", type=Path, default=EXPECTED, help="regression values")
+    parser.add_argument("--subsets", type=Path,
+                        help="YAML of inclusive frame ranges per sequence; keep only pairs inside them and skip the "
+                             "whole-window regression check")
     return parser.parse_args(argv)
 
 
@@ -118,17 +124,20 @@ def validate(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"regression values {args.expected} not found")
 
 
-def sequence_job(args: argparse.Namespace, name: str) -> SequenceJob:
+def sequence_job(args: argparse.Namespace, name: str, subsets: Subsets | None = None) -> SequenceJob:
     return SequenceJob(name, args.data_root, args.sequences_config, args.predictions, tuple(args.gaps_ms),
-                       args.out, name in args.save_maps, args.threads)
+                       args.out, name in args.save_maps, args.threads, None if subsets is None else subsets[name])
 
 
 def plan_sequence(job: SequenceJob, run: dict[str, Any]) -> list[PairTask]:
     sequence, frames = load_window(job)
     check_window(job.name, run, frames, job.sequences_config)
+    if job.frame_range is not None:
+        check_inside_window(job.name, frames, job.frame_range)
     for frame in frames:
-        check_rgb_file(prediction_path(job.run_dir, job.name, frame.index), frame, sequence.root)
-    return plan_pairs(frames, job.gaps_ms)
+        if job.frame_range is None or job.frame_range.contains(frame.index):
+            check_rgb_file(prediction_path(job.run_dir, job.name, frame.index), frame, sequence.root)
+    return plan_pairs(frames, job.gaps_ms, job.frame_range)
 
 
 def run_jobs(jobs: list[SequenceJob], workers: int) -> dict[str, SequenceOutcome]:
@@ -304,11 +313,14 @@ def run_consistency(args: argparse.Namespace) -> bool:
     validate(args)
     start_time, started = now(), time.perf_counter()
     run = read_run(args.predictions)
-    names = select_sequences(run, args.sequences_config, args.sequences)
+    subsets = load_subsets(args.subsets) if args.subsets else None
+    check_run_covers(run, subsets)
+    names = select_sequences(run, args.sequences_config,
+                             args.sequences if subsets is None else subset_sequences(subsets, args.sequences))
     unknown_maps = [name for name in args.save_maps if name not in names]
     if unknown_maps:
         raise ValueError(f"--save-maps names sequences that are not evaluated: {unknown_maps}; evaluating {names}")
-    jobs = {name: sequence_job(args, name) for name in names}
+    jobs = {name: sequence_job(args, name, subsets) for name in names}
     plans = {name: plan_sequence(job, run) for name, job in jobs.items()}
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -325,16 +337,20 @@ def run_consistency(args: argparse.Namespace) -> bool:
     record_path = args.out / "consistency.json"
     record = consistency_record(args, run, outcomes, reused, previous_sequences(record_path), start_time,
                                 time.perf_counter() - started)
+    if subsets is not None:
+        record["subsets"] = subsets_record(subsets)
     atomic_write(record_path, lambda f: f.write(json.dumps(record, indent=2) + "\n"))
     print_table(summary)
     for name, o in outcomes.items():
         print(f"{name}: {o.seconds / 60:.1f} min ({o.frame_seconds / 60:.1f} frames, {o.pair_seconds / 60:.1f} "
               f"pairs), peak {o.peak_mem_mib:.0f} MiB")
 
-    expected = json.loads(args.expected.read_text())
-    passed = report_regression(regression_checks(rows, expected), expected["tolerance"])
     print(f"wrote {args.out}")
-    return passed
+    if subsets is not None:
+        print("\nregression check against the development values skipped: --subsets keeps only part of each window")
+        return True
+    expected = json.loads(args.expected.read_text())
+    return report_regression(regression_checks(rows, expected), expected["tolerance"])
 
 
 def main() -> None:
