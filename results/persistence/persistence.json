@@ -1,0 +1,220 @@
+{
+  "predictions": {
+    "dir": "/kaggle/input/notebooks/sainavamodak/week-1-subtask-4-kaggle-runner/predictions/baseline",
+    "run": {
+      "name": "baseline",
+      "config": {
+        "name": "baseline",
+        "inference": {
+          "init": "zeros",
+          "seed": null
+        }
+      },
+      "start_time": "2026-10-06T09:15:58+00:00",
+      "end_time": "2026-10-06T09:37:39+00:00",
+      "frames_predicted": 1200,
+      "frames_skipped": 0,
+      "sequences": {
+        "rgbd_dataset_freiburg1_room": {
+          "window": {
+            "start": 366,
+            "count": 300
+          },
+          "frames": 300,
+          "mean_latency_ms": 1655.3152859133354,
+          "peak_mem_gb": 3.9929847717285156,
+          "invocation": "250f9edf",
+          "end_time": "2026-10-06T09:26:03+00:00"
+        },
+        "rgbd_dataset_freiburg1_desk": {
+          "window": {
+            "start": 209,
+            "count": 300
+          },
+          "frames": 300,
+          "mean_latency_ms": 1841.1217986433323,
+          "peak_mem_gb": 3.9929847717285156,
+          "invocation": "f6380745",
+          "end_time": "2026-10-06T09:27:01+00:00"
+        },
+        "rgbd_dataset_freiburg1_360": {
+          "window": {
+            "start": 0,
+            "count": 300
+          },
+          "frames": 300,
+          "mean_latency_ms": 1712.09067578667,
+          "peak_mem_gb": 3.9929847717285156,
+          "invocation": "250f9edf",
+          "end_time": "2026-10-06T09:35:51+00:00"
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "window": {
+            "start": 637,
+            "count": 300
+          },
+          "frames": 300,
+          "mean_latency_ms": 1886.2967145399982,
+          "peak_mem_gb": 3.9929847717285156,
+          "invocation": "f6380745",
+          "end_time": "2026-10-06T09:37:39+00:00"
+        }
+      },
+      "invocations": [
+        {
+          "id": "250f9edf",
+          "host": "fb26ec2ea869",
+          "device": "cuda:0",
+          "cuda_visible_devices": "1",
+          "gpu": "Tesla T4",
+          "torch": "2.11.0+cu128",
+          "cuda": "12.8",
+          "commits": {
+            "project": {
+              "commit": "5959d6779839b941df342ef8dd9fd6566d782b81",
+              "dirty": false
+            },
+            "pointdit": {
+              "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+              "dirty": false
+            },
+            "dinov3": {
+              "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+              "dirty": false
+            }
+          },
+          "start_time": "2026-10-06T09:15:58+00:00",
+          "end_time": "2026-10-06T09:35:51+00:00",
+          "sequences": {
+            "rgbd_dataset_freiburg1_room": {
+              "predicted": 300,
+              "skipped": 0
+            },
+            "rgbd_dataset_freiburg1_360": {
+              "predicted": 300,
+              "skipped": 0
+            }
+          }
+        },
+        {
+          "id": "f6380745",
+          "host": "fb26ec2ea869",
+          "device": "cuda:0",
+          "cuda_visible_devices": "0",
+          "gpu": "Tesla T4",
+          "torch": "2.11.0+cu128",
+          "cuda": "12.8",
+          "commits": {
+            "project": {
+              "commit": "5959d6779839b941df342ef8dd9fd6566d782b81",
+              "dirty": false
+            },
+            "pointdit": {
+              "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+              "dirty": false
+            },
+            "dinov3": {
+              "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+              "dirty": false
+            }
+          },
+          "start_time": "2026-10-06T09:16:00+00:00",
+          "end_time": "2026-10-06T09:37:39+00:00",
+          "sequences": {
+            "rgbd_dataset_freiburg1_desk": {
+              "predicted": 300,
+              "skipped": 0
+            },
+            "rgbd_dataset_freiburg3_long_office_household": {
+              "predicted": 300,
+              "skipped": 0
+            }
+          }
+        }
+      ]
+    }
+  },
+  "commits": {
+    "project": {
+      "commit": "0b96d5e1fec391030d7c3415db5a1c6ba053d5a0",
+      "dirty": false
+    },
+    "pointdit": {
+      "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+      "dirty": false
+    }
+  },
+  "arguments": {
+    "predictions": "/kaggle/input/notebooks/sainavamodak/week-1-subtask-4-kaggle-runner/predictions/baseline",
+    "data_root": "/kaggle/input/datasets/sainavamodak/pointdit-tum-rgb-d-subset/tum-rgbd-four-sequences",
+    "sequences_config": "/kaggle/working/Pointdit-In-Motion/configs/sequences.yaml",
+    "sequences": null,
+    "gaps_ms": [
+      33.0,
+      100.0,
+      333.0
+    ],
+    "out": "/kaggle/working/persistence",
+    "workers": 4,
+    "threads": 1,
+    "reference": "/kaggle/working/Pointdit-In-Motion/results/consistency/baseline"
+  },
+  "protocol": {
+    "pairing": "frame j is the window frame closest in time to t_i + gap, kept if within 10 ms",
+    "pairs_and_pixels": "as consistency_eval.py's M1: same pairing, visibility (depth-timestamp poses) and frame i's GT-aligned depth warped into j with RGB-timestamp poses; scored where visible and hit",
+    "errors": "E_i = (z_i->j - z_gt_j) / z_gt_j, E_j = (z_j - z_gt_j) / z_gt_j, both GT-aligned per frame by upstream compute_metrics",
+    "statistics": "median |E_i|, |E_j|, |E_i - E_j| (x100); Pearson and Spearman of E_i and E_j; persistent fraction P = 1 - Var(E_i - E_j) / (Var(E_i) + Var(E_j))",
+    "regions": "visible, interior (visible minus the GT_j depth-edge band), and near/mid/far thirds of GT_j depth over the visible pixels; a region with fewer than 1000 scored pixels is NaN",
+    "regression": "visible and interior median |E_i - E_j| equal m1_visible_median and m1_interior_median of the consistency pairs CSV within 1e-06; pair keys must match exactly"
+  },
+  "sequences": {
+    "rgbd_dataset_freiburg1_desk": {
+      "name": "rgbd_dataset_freiburg1_desk",
+      "pairs": {
+        "33": 299,
+        "100": 297,
+        "333": 290
+      },
+      "seconds": 3399.126858627,
+      "frame_seconds": 2983.5982125500027,
+      "peak_mem_mib": 2216.01171875
+    },
+    "rgbd_dataset_freiburg1_room": {
+      "name": "rgbd_dataset_freiburg1_room",
+      "pairs": {
+        "33": 299,
+        "100": 297,
+        "333": 290
+      },
+      "seconds": 3689.141728987,
+      "frame_seconds": 3231.5219959050005,
+      "peak_mem_mib": 2237.7890625
+    },
+    "rgbd_dataset_freiburg1_360": {
+      "name": "rgbd_dataset_freiburg1_360",
+      "pairs": {
+        "33": 299,
+        "100": 297,
+        "333": 290
+      },
+      "seconds": 3707.3537314620003,
+      "frame_seconds": 3273.526779647002,
+      "peak_mem_mib": 2262.41015625
+    },
+    "rgbd_dataset_freiburg3_long_office_household": {
+      "name": "rgbd_dataset_freiburg3_long_office_household",
+      "pairs": {
+        "33": 294,
+        "100": 292,
+        "333": 283
+      },
+      "seconds": 4029.764671013,
+      "frame_seconds": 3535.679013919999,
+      "peak_mem_mib": 2470.8828125
+    }
+  },
+  "cpus": 4,
+  "start_time": "2026-10-13T09:06:11+00:00",
+  "end_time": "2026-10-13T10:14:24+00:00",
+  "seconds": 4092.9
+}
