@@ -41,3 +41,20 @@ Subsets: fr1_360 frames 200–299, fr3_long_office_household 740–839. Runs: ze
 - Zero init vs a noise seed (~0.21–0.26) disagrees less than seed vs seed (~0.27–0.33), by about √2, consistent with the zero-init prediction lying near the centre of the noisy predictions.
 
 **Conclusion.** For moving-camera use, deterministic zero initialisation reduces short-term flicker at no accuracy cost.
+
+
+## Analysis of inconsistency
+
+Results: `results/consistency_analysis/`, `results/persistence/`; figures in `report/figures/consistency/`. Statistics as in the per-frame analysis (block-bootstrap CIs; claims only where the CI excludes the reference value at block lengths 8, 15 and 30).
+
+**Headline.** M2 / M2 floor is 1.34–1.92 in every sequence and gap, CI excluding 1 at all block lengths. It grows with gap on three of four sequences (fr1_360: 1.50 → 1.92; fr3: 1.34 → 1.70; fr1_desk: 1.42 → 1.80; fr1_room is flat, 1.64 → 1.57).
+
+**What drives excess inconsistency (33 ms).** Scene content and the frame's own accuracy, not blur: edge density (ρ 0.25–0.53; pooled fr1 0.32), depth range (0.28–0.40; pooled 0.32) and the frame's own Rel_d (pooled fr1 0.39) have robust positive correlations. Image sharpness has no robust effect on inconsistency (pooled partial ρ −0.08, not robust to block length), in contrast to its effect on per-frame accuracy. Camera speed matters only on fr3 (ρ 0.30) at 33 ms and fr1_360 (0.27) at 100 ms. Effects are weaker at 100 ms. Frames that are wrong tend to be the ones that are unstable.
+
+**Which region.** Relative to its floor, the near third is least consistent at 33 ms in every sequence (ratio near / mid / far: fr1_360 1.63 / 1.40 / 1.36; fr1_desk 1.50 / 1.29 / 1.31; fr1_room 1.82 / 1.52 / 1.57; fr3 1.46 / 1.23 / 1.25). In absolute terms the far third flickers most, but its floor is also highest (Kinect noise grows with distance). The differences between thirds narrow at 333 ms.
+
+**Flicker events (33 ms, per depth third).** 98 of 99 (fr1_360), 86 of 89 (fr1_room), 45 of 50 (fr1_desk) and 22 of 25 (fr3) model events have no matching event in the GT floor, so they are model behaviour, not data artifacts. On fr3, flicker is concentrated in the far third (21 events, 7.1% of pairs, against 0.7% in near and mid): near-identical frames from a slow, synchronized camera receive different far geometry, even with deterministic inference. The event list covers earlier spike frames 758, 767, 768, 770; frame 776 coincides with a floor event and is likely partly a ground-truth artifact. Several fr1_360 event pairs occur in all three thirds at once (e.g. 66→67, 82→83, 91→92, 111→112): whole-frame jumps, not region-specific.
+
+**Persistence.** On the same pixels, with GT depth as common reference, the median per-frame error is 2.0–2.5%, while frame-to-frame disagreement at 33 ms is 0.44–0.82% (2.6–5.2× smaller). The persistent fraction P is 0.90–0.94 at 33 ms, 0.79–0.90 at 100 ms and 0.47–0.75 at 333 ms (lowest on fr1_360, highest on fr3). Most error is therefore shared between neighbouring frames, and the view-dependent part grows with viewpoint change. Caveats: shared GT noise in the reference slightly inflates P; pose jitter lowers P at 333 ms on fr1, so those values are lower bounds.
+
+**Limitations.** One window per sequence; strongly autocorrelated pairs; correlational analysis; Kinect GT noise and fr1 pose jitter limit the floors; the flicker-event rule is a threshold choice.
