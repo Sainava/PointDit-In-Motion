@@ -24,11 +24,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pim.data.tum import Frame, TUMSequence, apply_window, load_sequence  # noqa: E402
 from pim.paths import DINOV3_REPO_DIR, FORK_DIR, REPO_ROOT  # noqa: E402
+from pim.subsets import Subsets, load_subsets, restrict_frames, subset_sequences, subsets_record  # noqa: E402
 
 WARMUP_RUNS = 2
 CONFIG_KEYS = {"name", "inference"}
 INFERENCE_KEYS = {"init", "seed"}
+OPTIONAL_INFERENCE_KEYS = {"seed_mode"}
 INITS = ("zeros", "noise")
+# per_call: torch.manual_seed(seed) before every frame, so all frames of a size start from the same noise.
+# per_frame: frame i gets seed * PER_FRAME_SEED_STRIDE + i, independent noise per frame.
+SEED_MODES = ("per_call", "per_frame")
+PER_FRAME_SEED_STRIDE = 1_000_000
 RUN_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -50,9 +56,18 @@ class RunConfig:
     name: str
     init: str
     seed: int | None
+    seed_mode: str = "per_call"
 
     def as_dict(self) -> dict[str, Any]:
-        return {"name": self.name, "inference": {"init": self.init, "seed": self.seed}}
+        inference: dict[str, Any] = {"init": self.init, "seed": self.seed}
+        if self.seed_mode != "per_call":
+            inference["seed_mode"] = self.seed_mode
+        return {"name": self.name, "inference": inference}
+
+    def frame_seed(self, frame_index: int) -> int | None:
+        if self.seed_mode == "per_frame":
+            return self.seed * PER_FRAME_SEED_STRIDE + frame_index
+        return self.seed
 
 
 @dataclass(frozen=True)
@@ -74,23 +89,29 @@ def load_run_config(path: Path) -> RunConfig:
     inference = raw["inference"]
     if not isinstance(inference, dict):
         raise ValueError(f"{path}: `inference` must be a mapping")
-    _check_keys(inference, INFERENCE_KEYS, f"{path}: inference")
+    _check_keys(inference, INFERENCE_KEYS, f"{path}: inference", OPTIONAL_INFERENCE_KEYS)
 
     name, init, seed = raw["name"], inference["init"], inference["seed"]
+    seed_mode = inference.get("seed_mode", "per_call")
     if not isinstance(name, str) or not RUN_NAME.match(name):
         raise ValueError(f"{path}: name must match {RUN_NAME.pattern}, got {name!r}")
     if init not in INITS:
         raise ValueError(f"{path}: inference.init must be one of {INITS}, got {init!r}")
     if seed is not None and (not isinstance(seed, int) or isinstance(seed, bool)):
         raise ValueError(f"{path}: inference.seed must be an integer or null, got {seed!r}")
-    return RunConfig(name, init, seed)
+    if seed_mode not in SEED_MODES:
+        raise ValueError(f"{path}: inference.seed_mode must be one of {SEED_MODES}, got {seed_mode!r}")
+    if seed_mode == "per_frame" and (init != "noise" or seed is None):
+        raise ValueError(f"{path}: seed_mode per_frame needs init noise and an integer seed")
+    return RunConfig(name, init, seed, seed_mode)
 
 
-def _check_keys(mapping: dict, expected: set[str], where: str) -> None:
-    unknown = sorted(set(mapping) - expected)
+def _check_keys(mapping: dict, expected: set[str], where: str, optional: set[str] = frozenset()) -> None:
+    unknown = sorted(set(mapping) - expected - optional)
     missing = sorted(expected - set(mapping))
     if unknown or missing:
-        raise ValueError(f"{where}: unknown keys {unknown}, missing keys {missing}; expected {sorted(expected)}")
+        raise ValueError(f"{where}: unknown keys {unknown}, missing keys {missing}; expected {sorted(expected)}"
+                         + (f", optional {sorted(optional)}" if optional else ""))
 
 
 def select_sequences(sequences_config: Path, requested: list[str] | None) -> list[str]:
@@ -111,11 +132,14 @@ def prediction_path(sequence_dir: Path, frame: Frame) -> Path:
     return sequence_dir / f"{frame.index:05d}.npz"
 
 
-def save_prediction(path: Path, frame: Frame, sequence_root: Path, result: Prediction) -> None:
+def save_prediction(
+    path: Path, frame: Frame, sequence_root: Path, result: Prediction, seed: int | None = None
+) -> None:
     points = result.points.astype(np.float16)
     if not np.isfinite(points).all():
         raise ValueError(f"{path}: points are non-finite after the float16 cast "
                          f"(float32 max |value| {np.abs(result.points).max()})")
+    extra = {} if seed is None else {"seed": np.int64(seed)}
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         with open(tmp, "wb") as f:
@@ -127,6 +151,7 @@ def save_prediction(path: Path, frame: Frame, sequence_root: Path, result: Predi
                 rgb_file=np.str_(frame.rgb_path.relative_to(sequence_root).as_posix()),
                 latency_ms=np.float64(result.latency_ms),
                 peak_mem_gb=np.float64(result.peak_memory_gb),
+                **extra,
             )
         os.replace(tmp, path)
     except BaseException:
@@ -151,8 +176,9 @@ def predict_sequence(
             continue
         if runner is None:
             raise RuntimeError(f"{path} needs predicting but no model was loaded")
-        result = runner.predict(frame.load_rgb(), init=config.init, seed=config.seed)
-        save_prediction(path, frame, sequence.root, result)
+        seed = config.frame_seed(frame.index)
+        result = runner.predict(frame.load_rgb(), init=config.init, seed=seed)
+        save_prediction(path, frame, sequence.root, result, seed)
         predicted += 1
 
     latencies, peaks = read_timings([prediction_path(sequence_dir, f) for f in frames])
@@ -190,13 +216,19 @@ def run_record(run_dir: Path) -> Iterator[dict[str, Any]]:
 
 
 def register_invocation(
-    record: dict[str, Any], config: RunConfig, windows: dict[str, dict[str, int]], invocation: dict[str, Any]
+    record: dict[str, Any], config: RunConfig, windows: dict[str, dict[str, int]], invocation: dict[str, Any],
+    subsets: dict[str, dict[str, int]] | None = None,
 ) -> None:
     if not record:
         record.update(name=config.name, config=config.as_dict(), start_time=None, end_time=None,
                       frames_predicted=0, frames_skipped=0, sequences={}, invocations=[])
+        if subsets is not None:
+            record["subsets"] = subsets
     elif record["config"] != config.as_dict():
         raise ValueError(f"run.json holds config {record['config']} but this run uses {config.as_dict()}; "
+                         "change the run name or remove the run directory")
+    elif record.get("subsets") != subsets:
+        raise ValueError(f"run.json holds subsets {record.get('subsets')} but this run uses {subsets}; "
                          "change the run name or remove the run directory")
     for name, window in windows.items():
         finished = record["sequences"].get(name)
@@ -284,6 +316,13 @@ def load_runner(device: str, warmup_image: np.ndarray, config: RunConfig) -> Run
     return runner
 
 
+def frames_to_predict(sequences: list[TUMSequence], subsets: Subsets | None) -> dict[str, list[Frame]]:
+    windows = {s.name: apply_window(s) for s in sequences}
+    if subsets is None:
+        return windows
+    return {name: restrict_frames(name, frames, subsets[name]) for name, frames in windows.items()}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True, help="run config, e.g. configs/baseline.yaml")
@@ -292,22 +331,26 @@ def main() -> None:
     parser.add_argument("--sequences", nargs="+", help="default: every sequence in --sequences-config")
     parser.add_argument("--out", type=Path, default=Path("/kaggle/working/predictions"))
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--subsets", type=Path,
+                        help="YAML of inclusive frame ranges per sequence; predict only those frames")
     args = parser.parse_args()
 
     config = load_run_config(args.config)
     if not args.data_root.is_dir():
         raise FileNotFoundError(f"data root {args.data_root} does not exist")
-    names = select_sequences(args.sequences_config, args.sequences)
+    subsets = load_subsets(args.subsets) if args.subsets else None
+    requested = args.sequences if subsets is None else subset_sequences(subsets, args.sequences)
+    names = select_sequences(args.sequences_config, requested)
     sequences = [load_sequence(args.data_root / name, args.sequences_config) for name in names]
-    windows = {s.name: apply_window(s) for s in sequences}
-    summaries = {name: window_summary(frames) for name, frames in windows.items()}
+    summaries = {s.name: window_summary(apply_window(s)) for s in sequences}
+    windows = frames_to_predict(sequences, subsets)
 
     run_dir = args.out / config.name
     run_dir.mkdir(parents=True, exist_ok=True)
     invocation = {"id": uuid.uuid4().hex[:8], **environment(args.device), "start_time": now(),
                   "end_time": None, "sequences": {}}
     with run_record(run_dir) as record:
-        register_invocation(record, config, summaries, invocation)
+        register_invocation(record, config, summaries, invocation, subsets_record(subsets))
 
     pending = sum(not prediction_path(run_dir / name, f).is_file()
                   for name, frames in windows.items() for f in frames)

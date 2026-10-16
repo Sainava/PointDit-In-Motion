@@ -1,0 +1,13 @@
+sequence,third,pairs,events,rate,floor_events,coincident,not_explained_by_floor
+rgbd_dataset_freiburg1_360,near,299,34,np.float64(0.11371237458193979),2,0,34
+rgbd_dataset_freiburg1_360,mid,299,30,np.float64(0.10033444816053512),0,0,30
+rgbd_dataset_freiburg1_360,far,299,35,np.float64(0.11705685618729098),1,1,34
+rgbd_dataset_freiburg1_desk,near,299,9,np.float64(0.030100334448160536),2,0,9
+rgbd_dataset_freiburg1_desk,mid,299,14,np.float64(0.046822742474916385),14,2,12
+rgbd_dataset_freiburg1_desk,far,299,27,np.float64(0.0903010033444816),10,3,24
+rgbd_dataset_freiburg1_room,near,299,28,np.float64(0.09364548494983277),0,0,28
+rgbd_dataset_freiburg1_room,mid,299,30,np.float64(0.10033444816053512),3,3,27
+rgbd_dataset_freiburg1_room,far,299,31,np.float64(0.10367892976588629),0,0,31
+rgbd_dataset_freiburg3_long_office_household,near,294,2,np.float64(0.006802721088435374),2,0,2
+rgbd_dataset_freiburg3_long_office_household,mid,294,2,np.float64(0.006802721088435374),3,1,1
+rgbd_dataset_freiburg3_long_office_household,far,294,21,np.float64(0.07142857142857142),1,2,19

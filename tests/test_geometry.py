@@ -158,3 +158,26 @@ def test_too_few_valid_pixels_is_skipped_not_raised(restrict: str) -> None:
     assert np.isnan([metrics.rel_p, metrics.delta1_p, metrics.rel_d, metrics.delta1_d]).all()
     assert metrics.aligned_points.shape == (H, W, 3) and np.isnan(metrics.aligned_points).all()
     assert metrics.aligned_depth.shape == (H, W) and np.isnan(metrics.aligned_depth).all()
+
+
+def test_alignment_fit_larger_than_subsample_fails() -> None:
+    from pim.metrics.geometry import MAX_ALIGNMENT_PIXELS, check_alignment_size
+
+    check_alignment_size(MAX_ALIGNMENT_PIXELS)
+    with pytest.raises(AssertionError, match="alignment fit"):
+        check_alignment_size(MAX_ALIGNMENT_PIXELS + 1)
+
+
+def test_upstream_aligners_are_size_checked() -> None:
+    import torch
+
+    from pim.metrics.geometry import MAX_ALIGNMENT_PIXELS, _upstream_compute_metrics
+
+    _upstream_compute_metrics()
+    import metrics.compute_metrics as module
+
+    n = MAX_ALIGNMENT_PIXELS + 1
+    with pytest.raises(AssertionError, match="alignment fit"):
+        module.align_depth_affine(torch.ones(n), torch.ones(n), torch.ones(n))
+    with pytest.raises(AssertionError, match="alignment fit"):
+        module.align_points_scale_xyz_shift(torch.ones(n, 3), torch.ones(n, 3), torch.ones(n))

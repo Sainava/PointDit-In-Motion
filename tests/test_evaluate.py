@@ -13,6 +13,7 @@ from PIL import Image
 from pim.evaluation import COLUMNS, EXTRA_METRICS, extra_metrics
 from pim.metrics.error_maps import rel_d_by_depth_tertile, relative_depth_error
 from pim.metrics.geometry import backproject, evaluate_frame
+from pim.subsets import FrameRange
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
@@ -180,6 +181,41 @@ def test_worker_pool_writes_the_same_rows_in_frame_order(setup, tmp_path: Path) 
     pooled = run(setup, tmp_path / "two", workers=2)
 
     assert pooled == single
+
+
+def test_subsets_restrict_frames_and_match_the_whole_window_rows(setup, tmp_path: Path) -> None:
+    run_dir, data_root, config = setup
+    full = run(setup, tmp_path / "full")
+
+    evaluate.run_evaluation(run_dir, data_root, config, None, tmp_path / "subset", 1, {SEQUENCE: FrameRange(2, 4)})
+
+    with open(tmp_path / "subset" / "per_frame.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+    # Frame 2's gap_ms still refers to frame 1, outside the subset.
+    assert rows == [r for r in full if 2 <= int(r["frame_index"]) <= 4]
+    record = json.loads((tmp_path / "subset" / "eval.json").read_text())
+    assert record["subsets"] == {SEQUENCE: {"first": 2, "last": 4}}
+    assert record["sequences"][SEQUENCE]["frames"] == 3
+    assert "subsets" not in json.loads((tmp_path / "full" / "eval.json").read_text())
+
+
+def test_subset_outside_the_window_fails(setup, tmp_path: Path) -> None:
+    run_dir, data_root, config = setup
+
+    with pytest.raises(ValueError, match="not inside the window"):
+        evaluate.run_evaluation(run_dir, data_root, config, None, tmp_path / "eval", 1, {SEQUENCE: FrameRange(0, 2)})
+
+
+def test_run_predicted_on_subsets_needs_matching_subsets(tmp_path: Path) -> None:
+    config = write_sequence(tmp_path)
+    run_dir = write_run(tmp_path)
+    run_json = run_dir / "run.json"
+    run_json.write_text(json.dumps({**json.loads(run_json.read_text()), "subsets": {SEQUENCE: {"first": 2, "last": 4}}}))
+
+    with pytest.raises(ValueError, match="pass the same --subsets"):
+        evaluate.run_evaluation(run_dir, tmp_path / "data", config, None, tmp_path / "a", 1)
+    with pytest.raises(ValueError, match="not inside the predicted subset"):
+        evaluate.run_evaluation(run_dir, tmp_path / "data", config, None, tmp_path / "b", 1, {SEQUENCE: FrameRange(1, 4)})
 
 
 def test_check_frame_numpy_recomputation_matches_evaluate_frame() -> None:

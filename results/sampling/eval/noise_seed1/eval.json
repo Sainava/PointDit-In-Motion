@@ -1,0 +1,194 @@
+{
+  "predictions": {
+    "dir": "/kaggle/input/notebooks/sainavamodak/temporal-subtask-3-sampling-runner/predictions/noise_seed1",
+    "run": {
+      "name": "noise_seed1",
+      "config": {
+        "name": "noise_seed1",
+        "inference": {
+          "init": "noise",
+          "seed": 1,
+          "seed_mode": "per_frame"
+        }
+      },
+      "start_time": "2026-10-12T14:57:08+00:00",
+      "end_time": "2026-10-12T15:03:46+00:00",
+      "frames_predicted": 200,
+      "frames_skipped": 0,
+      "sequences": {
+        "rgbd_dataset_freiburg1_360": {
+          "window": {
+            "start": 0,
+            "count": 300
+          },
+          "frames": 100,
+          "mean_latency_ms": 1620.448183079989,
+          "peak_mem_gb": 3.9929847717285156,
+          "invocation": "dec63440",
+          "end_time": "2026-10-12T15:00:43+00:00"
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "window": {
+            "start": 637,
+            "count": 300
+          },
+          "frames": 100,
+          "mean_latency_ms": 1622.1037246799935,
+          "peak_mem_gb": 3.9929847717285156,
+          "invocation": "dec63440",
+          "end_time": "2026-10-12T15:03:46+00:00"
+        }
+      },
+      "invocations": [
+        {
+          "id": "dec63440",
+          "host": "f4f61114228b",
+          "device": "cuda:0",
+          "cuda_visible_devices": "0",
+          "gpu": "Tesla T4",
+          "torch": "2.11.0+cu128",
+          "cuda": "12.8",
+          "commits": {
+            "project": {
+              "commit": "7bb32c97e8e5d628764b777a65d9a546c650d707",
+              "dirty": false
+            },
+            "pointdit": {
+              "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+              "dirty": false
+            },
+            "dinov3": {
+              "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+              "dirty": false
+            }
+          },
+          "start_time": "2026-10-12T14:57:08+00:00",
+          "end_time": "2026-10-12T15:03:46+00:00",
+          "sequences": {
+            "rgbd_dataset_freiburg1_360": {
+              "predicted": 100,
+              "skipped": 0
+            },
+            "rgbd_dataset_freiburg3_long_office_household": {
+              "predicted": 100,
+              "skipped": 0
+            }
+          }
+        }
+      ],
+      "subsets": {
+        "rgbd_dataset_freiburg1_360": {
+          "first": 200,
+          "last": 299
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "first": 740,
+          "last": 839
+        }
+      }
+    }
+  },
+  "commits": {
+    "project": {
+      "commit": "7bb32c97e8e5d628764b777a65d9a546c650d707",
+      "dirty": false
+    },
+    "pointdit": {
+      "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+      "dirty": false
+    }
+  },
+  "protocol": {
+    "mask": "GT depth > 0 only; the prediction's sky mask is not applied (pred_valid=None), as upstream",
+    "alignment": "upstream metrics.compute_metrics: points scale + xyz shift, depth scale + shift, each fitted on a 64x64 masked nearest subsample and applied to the full frame",
+    "resolution": "full 640x480 frames, no resize or crop",
+    "metrics": "rel_p, delta1_p, rel_d, delta1_d from upstream metrics/metrics.py, x100",
+    "min_valid_pixels": 100,
+    "rel_d_near_mid_far": "mean |aligned depth - GT| / GT x100 over valid pixels below, between and above the frame's GT depth tertiles, with the same aligned depth as rel_d",
+    "focal_ratio": "implied fx / true fx: L1 fit of X = a(u - cx)Z + b(u - cx) + c, f = 1/a, on the raw prediction over GT-valid pixels with |u - cx| > 50 px"
+  },
+  "data_root": "/kaggle/input/datasets/sainavamodak/pointdit-tum-rgb-d-subset/tum-rgbd-four-sequences",
+  "sequences_config": {
+    "cameras": {
+      "ros_default": {
+        "fx": 525.0,
+        "fy": 525.0,
+        "cx": 319.5,
+        "cy": 239.5
+      },
+      "freiburg3": {
+        "fx": 535.4,
+        "fy": 539.2,
+        "cx": 320.1,
+        "cy": 247.6
+      }
+    },
+    "sequences": {
+      "rgbd_dataset_freiburg1_desk": {
+        "camera": "ros_default",
+        "window": {
+          "start": 209,
+          "count": 300
+        }
+      },
+      "rgbd_dataset_freiburg1_room": {
+        "camera": "ros_default",
+        "window": {
+          "start": 366,
+          "count": 300
+        }
+      },
+      "rgbd_dataset_freiburg1_360": {
+        "camera": "ros_default",
+        "window": {
+          "start": 0,
+          "count": 300
+        }
+      },
+      "rgbd_dataset_freiburg3_long_office_household": {
+        "camera": "freiburg3",
+        "window": {
+          "start": 637,
+          "count": 300
+        }
+      }
+    }
+  },
+  "sequences": {
+    "rgbd_dataset_freiburg1_360": {
+      "window": {
+        "start": 0,
+        "count": 300
+      },
+      "frames": 100,
+      "skipped": 0,
+      "seconds": 354.7
+    },
+    "rgbd_dataset_freiburg3_long_office_household": {
+      "window": {
+        "start": 637,
+        "count": 300
+      },
+      "frames": 100,
+      "skipped": 0,
+      "seconds": 389.6
+    }
+  },
+  "frames": 200,
+  "skipped": 0,
+  "workers": 4,
+  "cpus": 4,
+  "seconds_per_frame": 3.7213459244349996,
+  "start_time": "2026-10-12T15:53:42+00:00",
+  "end_time": "2026-10-12T16:06:29+00:00",
+  "subsets": {
+    "rgbd_dataset_freiburg1_360": {
+      "first": 200,
+      "last": 299
+    },
+    "rgbd_dataset_freiburg3_long_office_household": {
+      "first": 740,
+      "last": 839
+    }
+  }
+}

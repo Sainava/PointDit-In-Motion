@@ -1,0 +1,264 @@
+{
+  "description": "Subtask-1 development values (scripts/check_reprojection.py --sweep, depth-timestamp poses for visibility and the GT floor): median over pairs of each pair's median relative error x100. Printed to 3 decimals, so rounding alone accounts for up to 5e-4.",
+  "tolerance": 0.001,
+  "tables": {
+    "gt_only_full_window": {
+      "description": "GT-only sweep over the full 300-frame windows",
+      "pairs": {
+        "rgbd_dataset_freiburg1_desk": {
+          "33": 299,
+          "100": 297,
+          "333": 290
+        },
+        "rgbd_dataset_freiburg1_room": {
+          "33": 299,
+          "100": 297,
+          "333": 290
+        },
+        "rgbd_dataset_freiburg1_360": {
+          "33": 299,
+          "100": 297,
+          "333": 290
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "33": 294,
+          "100": 292,
+          "333": 283
+        }
+      },
+      "values": {
+        "rgbd_dataset_freiburg1_desk": {
+          "visible": {
+            "33": {
+              "gt_floor_depth": 0.388,
+              "m2_floor": 0.337
+            },
+            "100": {
+              "gt_floor_depth": 0.514,
+              "m2_floor": 0.445
+            },
+            "333": {
+              "gt_floor_depth": 0.964,
+              "m2_floor": 0.621
+            }
+          },
+          "interior": {
+            "33": {
+              "gt_floor_depth": 0.373,
+              "m2_floor": 0.3
+            },
+            "100": {
+              "gt_floor_depth": 0.481,
+              "m2_floor": 0.403
+            },
+            "333": {
+              "gt_floor_depth": 0.887,
+              "m2_floor": 0.547
+            }
+          }
+        },
+        "rgbd_dataset_freiburg1_room": {
+          "visible": {
+            "33": {
+              "gt_floor_depth": 0.322,
+              "m2_floor": 0.331
+            },
+            "100": {
+              "gt_floor_depth": 0.457,
+              "m2_floor": 0.46
+            },
+            "333": {
+              "gt_floor_depth": 0.781,
+              "m2_floor": 0.694
+            }
+          },
+          "interior": {
+            "33": {
+              "gt_floor_depth": 0.306,
+              "m2_floor": 0.312
+            },
+            "100": {
+              "gt_floor_depth": 0.43,
+              "m2_floor": 0.42
+            },
+            "333": {
+              "gt_floor_depth": 0.743,
+              "m2_floor": 0.619
+            }
+          }
+        },
+        "rgbd_dataset_freiburg1_360": {
+          "visible": {
+            "33": {
+              "gt_floor_depth": 0.397,
+              "m2_floor": 0.365
+            },
+            "100": {
+              "gt_floor_depth": 0.627,
+              "m2_floor": 0.486
+            },
+            "333": {
+              "gt_floor_depth": 1.336,
+              "m2_floor": 0.714
+            }
+          },
+          "interior": {
+            "33": {
+              "gt_floor_depth": 0.38,
+              "m2_floor": 0.346
+            },
+            "100": {
+              "gt_floor_depth": 0.594,
+              "m2_floor": 0.457
+            },
+            "333": {
+              "gt_floor_depth": 1.294,
+              "m2_floor": 0.669
+            }
+          }
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "visible": {
+            "33": {
+              "gt_floor_depth": 0.261,
+              "m2_floor": 0.246
+            },
+            "100": {
+              "gt_floor_depth": 0.296,
+              "m2_floor": 0.278
+            },
+            "333": {
+              "gt_floor_depth": 0.407,
+              "m2_floor": 0.363
+            }
+          },
+          "interior": {
+            "33": {
+              "gt_floor_depth": 0.25,
+              "m2_floor": 0.23
+            },
+            "100": {
+              "gt_floor_depth": 0.284,
+              "m2_floor": 0.263
+            },
+            "333": {
+              "gt_floor_depth": 0.389,
+              "m2_floor": 0.344
+            }
+          }
+        }
+      }
+    },
+    "prediction_sample": {
+      "description": "pairs with both frames among the 20-frame prediction samples",
+      "frames": {
+        "rgbd_dataset_freiburg1_360": [
+          0,
+          19
+        ],
+        "rgbd_dataset_freiburg3_long_office_household": [
+          637,
+          656
+        ]
+      },
+      "pairs": {
+        "rgbd_dataset_freiburg1_360": {
+          "33": 19,
+          "100": 17,
+          "333": 10
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "33": 19,
+          "100": 17,
+          "333": 7
+        }
+      },
+      "values": {
+        "rgbd_dataset_freiburg1_360": {
+          "visible": {
+            "33": {
+              "gt_floor_depth": 0.502,
+              "m1": 0.813,
+              "m2_floor": 0.374,
+              "m2": 0.463
+            },
+            "100": {
+              "gt_floor_depth": 0.832,
+              "m1": 1.491,
+              "m2_floor": 0.497,
+              "m2": 0.599
+            },
+            "333": {
+              "gt_floor_depth": 2.543,
+              "m1": 4.01,
+              "m2_floor": 1.653,
+              "m2": 1.286
+            }
+          },
+          "interior": {
+            "33": {
+              "gt_floor_depth": 0.497,
+              "m1": 0.825,
+              "m2_floor": 0.354,
+              "m2": 0.434
+            },
+            "100": {
+              "gt_floor_depth": 0.819,
+              "m1": 1.476,
+              "m2_floor": 0.474,
+              "m2": 0.576
+            },
+            "333": {
+              "gt_floor_depth": 2.476,
+              "m1": 3.933,
+              "m2_floor": 1.521,
+              "m2": 1.248
+            }
+          }
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "visible": {
+            "33": {
+              "gt_floor_depth": 0.329,
+              "m1": 0.756,
+              "m2_floor": 0.32,
+              "m2": 0.642
+            },
+            "100": {
+              "gt_floor_depth": 0.449,
+              "m1": 0.928,
+              "m2_floor": 0.422,
+              "m2": 0.774
+            },
+            "333": {
+              "gt_floor_depth": 0.569,
+              "m1": 1.827,
+              "m2_floor": 0.532,
+              "m2": 1.012
+            }
+          },
+          "interior": {
+            "33": {
+              "gt_floor_depth": 0.306,
+              "m1": 0.686,
+              "m2_floor": 0.293,
+              "m2": 0.594
+            },
+            "100": {
+              "gt_floor_depth": 0.413,
+              "m1": 0.862,
+              "m2_floor": 0.379,
+              "m2": 0.743
+            },
+            "333": {
+              "gt_floor_depth": 0.531,
+              "m1": 1.806,
+              "m2_floor": 0.485,
+              "m2": 1.005
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -7,12 +7,10 @@ import csv
 import json
 import multiprocessing
 import os
-import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -27,6 +25,12 @@ from pim.evaluation import (  # noqa: E402
 )
 from pim.metrics.geometry import MIN_VALID_PIXELS  # noqa: E402
 from pim.paths import FORK_DIR, REPO_ROOT  # noqa: E402
+from pim.runs import (  # noqa: E402
+    available_cpus, check_window, git_commit, now, read_run, select_sequences,
+)
+from pim.subsets import (  # noqa: E402
+    FrameRange, Subsets, check_inside_window, check_run_covers, load_subsets, subset_sequences, subsets_record,
+)
 
 PROTOCOL = {
     "mask": "GT depth > 0 only; the prediction's sky mask is not applied (pred_valid=None), as upstream",
@@ -50,64 +54,24 @@ class SequenceResult:
     seconds: float
 
 
-def now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def git_commit(repo: Path) -> dict[str, Any]:
-    def git(*args: str) -> str:
-        done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
-        if done.returncode != 0:
-            raise RuntimeError(f"git {' '.join(args)} failed in {repo}: {done.stderr.strip()}")
-        return done.stdout.strip()
-
-    return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
-
-
-def read_run(run_dir: Path) -> dict[str, Any]:
-    path = run_dir / "run.json"
-    if not path.is_file():
-        raise FileNotFoundError(f"{path} not found; --predictions must be a run directory written by predict.py")
-    return json.loads(path.read_text())
-
-
-def select_sequences(run: dict[str, Any], sequences_config: Path, requested: list[str] | None) -> list[str]:
-    predicted = list(run.get("sequences") or {})
-    if not predicted:
-        raise ValueError("run.json lists no predicted sequences")
-    known = list((yaml.safe_load(sequences_config.read_text()) or {}).get("sequences") or {})
-    unknown = [name for name in predicted if name not in known]
-    if unknown:
-        raise ValueError(f"run.json sequences {unknown} are not in {sequences_config}")
-    if requested is None:
-        return [name for name in known if name in predicted]
-    missing = [name for name in requested if name not in predicted]
-    if missing:
-        raise ValueError(f"sequences {missing} were not predicted in this run; run.json has {predicted}")
-    if len(set(requested)) != len(requested):
-        raise ValueError(f"--sequences lists a sequence twice: {requested}")
-    return requested
-
-
 def sequence_tasks(
-    name: str, run: dict[str, Any], run_dir: Path, data_root: Path, sequences_config: Path
+    name: str, run: dict[str, Any], run_dir: Path, data_root: Path, sequences_config: Path,
+    frame_range: FrameRange | None = None,
 ) -> list[FrameTask]:
     sequence = load_sequence(data_root / name, sequences_config)
     frames = apply_window(sequence)
-    window = {"start": frames[0].index, "count": len(frames)}
-    if run["sequences"][name]["window"] != window:
-        raise ValueError(f"{name}: predictions cover window {run['sequences'][name]['window']}, "
-                         f"but {sequences_config} now gives {window}")
-    return build_tasks(name, sequence.root, sequence.K, frames, run_dir)
+    check_window(name, run, frames, sequences_config)
+    # Tasks are built on the whole window so gap_ms of a subset's first frame still refers to its predecessor.
+    tasks = build_tasks(name, sequence.root, sequence.K, frames, run_dir)
+    if frame_range is None:
+        return tasks
+    check_inside_window(name, frames, frame_range)
+    return [t for t in tasks if frame_range.contains(t.frame.index)]
 
 
 def check_predictions(tasks: list[FrameTask]) -> None:
     for task in tasks:
         check_rgb_file(task.prediction, task.frame, task.sequence_root)
-
-
-def available_cpus() -> int:
-    return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
 
 
 def evaluate_tasks(tasks: list[FrameTask], workers: int) -> Iterator[dict[str, Any]]:
@@ -126,16 +90,20 @@ def evaluate_tasks(tasks: list[FrameTask], workers: int) -> Iterator[dict[str, A
 
 
 def run_evaluation(
-    run_dir: Path, data_root: Path, sequences_config: Path, requested: list[str] | None, out: Path, workers: int
+    run_dir: Path, data_root: Path, sequences_config: Path, requested: list[str] | None, out: Path, workers: int,
+    subsets: Subsets | None = None,
 ) -> dict[str, Any]:
     if workers < 1:
         raise ValueError(f"--workers must be at least 1, got {workers}")
     if not data_root.is_dir():
         raise FileNotFoundError(f"data root {data_root} does not exist")
     run = read_run(run_dir)
+    check_run_covers(run, subsets)
     start_time = now()
-    names = select_sequences(run, sequences_config, requested)
-    tasks = {name: sequence_tasks(name, run, run_dir, data_root, sequences_config) for name in names}
+    names = select_sequences(run, sequences_config,
+                             requested if subsets is None else subset_sequences(subsets, requested))
+    tasks = {name: sequence_tasks(name, run, run_dir, data_root, sequences_config,
+                                  None if subsets is None else subsets[name]) for name in names}
     for sequence_list in tasks.values():
         check_predictions(sequence_list)
 
@@ -165,6 +133,8 @@ def run_evaluation(
     os.replace(partial, out / "per_frame.csv")
 
     record = eval_record(run, run_dir, data_root, sequences_config, workers, results, start_time)
+    if subsets is not None:
+        record["subsets"] = subsets_record(subsets)
     (out / "eval.json").write_text(json.dumps(record, indent=2) + "\n")
     print_summary(rows)
     print(f"{record['seconds_per_frame']:.2f} s/frame overall; wrote {out / 'per_frame.csv'} and {out / 'eval.json'}")
@@ -218,8 +188,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=1,
                         help="worker processes; the CPUs are split between them and each needs ~3.5 GB of RAM")
+    parser.add_argument("--subsets", type=Path,
+                        help="YAML of inclusive frame ranges per sequence; evaluate only those frames")
     args = parser.parse_args()
-    run_evaluation(args.predictions, args.data_root, args.sequences_config, args.sequences, args.out, args.workers)
+    run_evaluation(args.predictions, args.data_root, args.sequences_config, args.sequences, args.out, args.workers,
+                   load_subsets(args.subsets) if args.subsets else None)
 
 
 if __name__ == "__main__":
