@@ -1,0 +1,53 @@
+sequence,config,n,offsets_ms,pred_std_ratio,pred_std_ratio_low,pred_std_ratio_high,pred_rel_d_change_pct,pred_rel_d_change_pct_low,pred_rel_d_change_pct_high,pred_std_ratio_no_extra_warp
+rgbd_dataset_freiburg1_360,self_only,1,0,1.0,1.0,1.0,0.0,0.0,0.0,1.0
+rgbd_dataset_freiburg1_360,causal_adjacent_w1,2,0 -33,0.9827,0.9797,0.9863,-1.73,-2.03,-1.37,0.9793
+rgbd_dataset_freiburg1_360,causal_adjacent_w2,3,0 -33 -66,0.9709,0.9654,0.9774,-2.91,-3.46,-2.26,0.9665
+rgbd_dataset_freiburg1_360,causal_adjacent_w4,5,0 -33 -66 -99 -132,0.9521,0.9417,0.9638,-4.79,-5.83,-3.62,0.9467
+rgbd_dataset_freiburg1_360,centred_adjacent_w1,3,0 -33 33,0.9695,0.964,0.976,-3.05,-3.6,-2.4,0.9665
+rgbd_dataset_freiburg1_360,centred_adjacent_w2,5,0 -33 33 -66 66,0.9499,0.9395,0.9616,-5.01,-6.05,-3.84,0.9467
+rgbd_dataset_freiburg1_360,centred_adjacent_w4,9,0 -33 33 -66 66 -99 99 -132 132,0.9067,0.8832,0.9311,-9.33,-11.68,-6.89,0.9032
+rgbd_dataset_freiburg1_360,causal_diverse_w1,2,0 -100,0.9674,0.9588,0.977,-3.26,-4.12,-2.3,0.9584
+rgbd_dataset_freiburg1_360,causal_diverse_w2,3,0 -100 -200,0.9351,0.9155,0.9555,-6.49,-8.45,-4.45,0.9189
+rgbd_dataset_freiburg1_360,causal_diverse_w3,4,0 -100 -200 -300,0.9053,0.8754,0.9355,-9.47,-12.46,-6.45,0.8849
+rgbd_dataset_freiburg1_360,causal_diverse_w4,5,0 -100 -200 -300 -400,0.8793,0.8406,0.9177,-12.07,-15.94,-8.23,0.8579
+rgbd_dataset_freiburg1_360,centred_diverse_w1,3,0 -100 100,0.9273,0.9075,0.9479,-7.27,-9.25,-5.21,0.9189
+rgbd_dataset_freiburg1_360,centred_diverse_w2,5,0 -100 100 -200 200,0.8704,0.8313,0.9091,-12.96,-16.87,-9.09,0.8579
+rgbd_dataset_freiburg1_desk,self_only,1,0,1.0,1.0,1.0,0.0,0.0,0.0,1.0
+rgbd_dataset_freiburg1_desk,causal_adjacent_w1,2,0 -33,0.9784,0.9685,0.9856,-2.16,-3.15,-1.44,0.9735
+rgbd_dataset_freiburg1_desk,causal_adjacent_w2,3,0 -33 -66,0.9622,0.9451,0.9734,-3.78,-5.49,-2.66,0.9567
+rgbd_dataset_freiburg1_desk,causal_adjacent_w4,5,0 -33 -66 -99 -132,0.9381,0.9102,0.9547,-6.19,-8.98,-4.53,0.9322
+rgbd_dataset_freiburg1_desk,centred_adjacent_w1,3,0 -33 33,0.9611,0.944,0.9723,-3.89,-5.6,-2.77,0.9567
+rgbd_dataset_freiburg1_desk,centred_adjacent_w2,5,0 -33 33 -66 66,0.9363,0.9084,0.9529,-6.37,-9.16,-4.71,0.9322
+rgbd_dataset_freiburg1_desk,centred_adjacent_w4,9,0 -33 33 -66 66 -99 99 -132 132,0.8939,0.8496,0.9188,-10.61,-15.04,-8.12,0.89
+rgbd_dataset_freiburg1_desk,causal_diverse_w1,2,0 -100,0.9548,0.9314,0.9675,-4.52,-6.86,-3.25,0.9453
+rgbd_dataset_freiburg1_desk,causal_diverse_w2,3,0 -100 -200,0.9218,0.8841,0.9422,-7.82,-11.59,-5.78,0.9064
+rgbd_dataset_freiburg1_desk,causal_diverse_w3,4,0 -100 -200 -300,0.8942,0.8457,0.9206,-10.58,-15.43,-7.94,0.8758
+rgbd_dataset_freiburg1_desk,causal_diverse_w4,5,0 -100 -200 -300 -400,0.8712,0.814,0.9022,-12.88,-18.6,-9.78,0.8521
+rgbd_dataset_freiburg1_desk,centred_diverse_w1,3,0 -100 100,0.9153,0.8774,0.9359,-8.47,-12.26,-6.41,0.9064
+rgbd_dataset_freiburg1_desk,centred_diverse_w2,5,0 -100 100 -200 200,0.8639,0.8062,0.8951,-13.61,-19.38,-10.49,0.8521
+rgbd_dataset_freiburg1_room,self_only,1,0,1.0,1.0,1.0,0.0,0.0,0.0,1.0
+rgbd_dataset_freiburg1_room,causal_adjacent_w1,2,0 -33,0.9865,0.984,0.9896,-1.35,-1.6,-1.04,0.9844
+rgbd_dataset_freiburg1_room,causal_adjacent_w2,3,0 -33 -66,0.9776,0.9727,0.9829,-2.24,-2.73,-1.71,0.9752
+rgbd_dataset_freiburg1_room,causal_adjacent_w4,5,0 -33 -66 -99 -132,0.9641,0.9554,0.9729,-3.59,-4.46,-2.71,0.9615
+rgbd_dataset_freiburg1_room,centred_adjacent_w1,3,0 -33 33,0.977,0.9721,0.9823,-2.3,-2.79,-1.77,0.9752
+rgbd_dataset_freiburg1_room,centred_adjacent_w2,5,0 -33 33 -66 66,0.9633,0.9545,0.972,-3.67,-4.55,-2.8,0.9615
+rgbd_dataset_freiburg1_room,centred_adjacent_w4,9,0 -33 33 -66 66 -99 99 -132 132,0.9356,0.9204,0.952,-6.44,-7.96,-4.8,0.934
+rgbd_dataset_freiburg1_room,causal_diverse_w1,2,0 -100,0.9745,0.9665,0.9816,-2.55,-3.35,-1.84,0.9701
+rgbd_dataset_freiburg1_room,causal_diverse_w2,3,0 -100 -200,0.9511,0.9376,0.9649,-4.89,-6.24,-3.51,0.9446
+rgbd_dataset_freiburg1_room,causal_diverse_w3,4,0 -100 -200 -300,0.9311,0.9132,0.9507,-6.89,-8.68,-4.93,0.9236
+rgbd_dataset_freiburg1_room,causal_diverse_w4,5,0 -100 -200 -300 -400,0.9148,0.8935,0.939,-8.52,-10.65,-6.1,0.9072
+rgbd_dataset_freiburg1_room,centred_diverse_w1,3,0 -100 100,0.9487,0.9351,0.9625,-5.13,-6.49,-3.75,0.9446
+rgbd_dataset_freiburg1_room,centred_diverse_w2,5,0 -100 100 -200 200,0.9121,0.8907,0.9364,-8.79,-10.93,-6.36,0.9072
+rgbd_dataset_freiburg3_long_office_household,self_only,1,0,1.0,1.0,1.0,0.0,0.0,0.0,1.0
+rgbd_dataset_freiburg3_long_office_household,causal_adjacent_w1,2,0 -33,0.9842,0.974,0.9894,-1.58,-2.6,-1.06,0.9826
+rgbd_dataset_freiburg3_long_office_household,causal_adjacent_w2,3,0 -33 -66,0.9759,0.9609,0.9834,-2.41,-3.91,-1.66,0.9744
+rgbd_dataset_freiburg3_long_office_household,causal_adjacent_w4,5,0 -33 -66 -99 -132,0.9652,0.9443,0.9756,-3.48,-5.57,-2.44,0.9639
+rgbd_dataset_freiburg3_long_office_household,centred_adjacent_w1,3,0 -33 33,0.9758,0.9608,0.9832,-2.42,-3.92,-1.68,0.9744
+rgbd_dataset_freiburg3_long_office_household,centred_adjacent_w2,5,0 -33 33 -66 66,0.965,0.9442,0.9754,-3.5,-5.58,-2.46,0.9639
+rgbd_dataset_freiburg3_long_office_household,centred_adjacent_w4,9,0 -33 33 -66 66 -99 99 -132 132,0.9459,0.9159,0.9624,-5.41,-8.41,-3.76,0.9451
+rgbd_dataset_freiburg3_long_office_household,causal_diverse_w1,2,0 -100,0.9761,0.9613,0.9833,-2.39,-3.87,-1.67,0.974
+rgbd_dataset_freiburg3_long_office_household,causal_diverse_w2,3,0 -100 -200,0.9578,0.9337,0.9709,-4.22,-6.63,-2.91,0.9554
+rgbd_dataset_freiburg3_long_office_household,causal_diverse_w3,4,0 -100 -200 -300,0.9432,0.9121,0.9613,-5.68,-8.79,-3.87,0.9407
+rgbd_dataset_freiburg3_long_office_household,causal_diverse_w4,5,0 -100 -200 -300 -400,0.9319,0.8955,0.9538,-6.81,-10.45,-4.62,0.9296
+rgbd_dataset_freiburg3_long_office_household,centred_diverse_w1,3,0 -100 100,0.9573,0.9332,0.9705,-4.27,-6.68,-2.95,0.9554
+rgbd_dataset_freiburg3_long_office_household,centred_diverse_w2,5,0 -100 100 -200 200,0.9314,0.895,0.9534,-6.86,-10.5,-4.66,0.9296
