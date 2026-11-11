@@ -35,10 +35,10 @@ Subsets: fr1_360 frames 200–299, fr3_long_office_household 740–839. Runs: ze
 **Validation.** The zero-init rerun reproduced the cached baseline exactly (200/200 frames, max difference 0); zero-init consistency on the subsets matched the full baseline run exactly (0 failures).
 
 **Findings.**
-- Noise init increases frame-to-frame inconsistency (M2) at 33 ms by 10–22% on fr1_360 and 14–18% on fr3 (most CIs exclude no change); by ~4–9% at 100 ms (significant on fr3 only); not at 333 ms (ratios 0.98–1.02). Sampling noise adds short-term flicker; at larger gaps, view-dependent inconsistency dominates.
+- Noise init increases frame-to-frame inconsistency (M2) at 33 ms by 10–22% on fr1_360 and 14–18% on fr3 (all six CIs exclude no change); by ~4–9% at 100 ms (significant on fr3 for two of three seeds, not on fr1_360); not at 333 ms (ratios 0.97–1.02, with one fr3 seed marginally above 1 at 1.015, CI 1.003–1.171). Sampling-noise CIs use block length 15 only. Sampling noise adds short-term flicker; at larger gaps, view-dependent inconsistency dominates.
 - Same-frame disagreement between noise seeds is ~0.27–0.33% (median per pixel), 40–70% of the zero-init frame-to-frame inconsistency at 33 ms (0.66% fr1_360, 0.42% fr3 on these subsets).
 - Accuracy is essentially unchanged: noise minus zeros in per-frame Rel_d is +0.01 to +0.04 points (baseline 4–7%); on fr3 noise is very slightly worse (CIs exclude zero).
-- Zero init vs a noise seed (~0.21–0.26) disagrees less than seed vs seed (~0.27–0.33), by about √2, consistent with the zero-init prediction lying near the centre of the noisy predictions.
+- Seed-versus-seed disagreement (~0.27–0.33) is 1.25–1.35 times zeros-versus-seed disagreement (~0.21–0.26), a little below √2, consistent with zero init lying near but not exactly at the centre of the noisy predictions.
 
 **Conclusion.** For moving-camera use, deterministic zero initialisation reduces short-term flicker at no accuracy cost.
 
@@ -49,7 +49,7 @@ Results: `results/consistency_analysis/`, `results/persistence/`; figures in `re
 
 **Headline.** M2 / M2 floor is 1.34–1.92 in every sequence and gap, CI excluding 1 at all block lengths. It grows with gap on three of four sequences (fr1_360: 1.50 → 1.92; fr3: 1.34 → 1.70; fr1_desk: 1.42 → 1.80; fr1_room is flat, 1.64 → 1.57).
 
-**What drives excess inconsistency (33 ms).** Scene content and the frame's own accuracy, not blur: edge density (ρ 0.25–0.53; pooled fr1 0.32), depth range (0.28–0.40; pooled 0.32) and the frame's own Rel_d (pooled fr1 0.39) have robust positive correlations. Image sharpness has no robust effect on inconsistency (pooled partial ρ −0.08, not robust to block length), in contrast to its effect on per-frame accuracy. Camera speed matters only on fr3 (ρ 0.30) at 33 ms and fr1_360 (0.27) at 100 ms. Effects are weaker at 100 ms. Frames that are wrong tend to be the ones that are unstable.
+**What drives excess inconsistency (33 ms).** Scene content and the frame's own accuracy, not blur: edge density (ρ 0.25–0.53 on three sequences, fr1_desk 0.17 and not robust; pooled fr1 0.32), depth range (0.28–0.40; pooled 0.32) and the frame's own Rel_d (pooled fr1 0.39) have robust positive correlations. Image sharpness has no robust effect on inconsistency (pooled partial ρ −0.08, not robust to block length), in contrast to its effect on per-frame accuracy. Camera speed matters only on fr3 (ρ 0.30) at 33 ms and fr1_360 (0.27) at 100 ms. On fr1_360, inconsistency has a robust negative correlation with expected misalignment (ρ −0.18). Effects are weaker at 100 ms. Frames that are wrong tend to be the ones that are unstable.
 
 **Which region.** Relative to its floor, the near third is least consistent at 33 ms in every sequence (ratio near / mid / far: fr1_360 1.63 / 1.40 / 1.36; fr1_desk 1.50 / 1.29 / 1.31; fr1_room 1.82 / 1.52 / 1.57; fr3 1.46 / 1.23 / 1.25). In absolute terms the far third flickers most, but its floor is also highest (Kinect noise grows with distance). The differences between thirds narrow at 333 ms.
 
