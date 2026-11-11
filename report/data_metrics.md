@@ -23,13 +23,11 @@ fr3 has no hole-free 300-frame stretch; its 5 holes are single dropped frames (6
 | Component | Commit |
 |---|---|
 | Project (predictions) | `5959d67` |
-| Project (evaluation) | `584cd16` |
+| Project (evaluation) | `5be07dd` |
 | PointDiT fork (Sainava/Sai-pointdit) | `664736a` |
 | DINOv3 code | `6876159` |
 
 - Environment: torch 2.11.0+cu128, CUDA 12.8, Kaggle Tesla T4.
-- Predictions: Kaggle runner notebook, version `<n>` (1,200 frames, two T4s in parallel).
-- Evaluation: Kaggle CPU evaluation notebook, version `<n>` (4.47 s/frame).
 
 ## Validation
 
