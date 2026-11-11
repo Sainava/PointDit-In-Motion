@@ -11,6 +11,8 @@ from pim.fusion.select import select_sources
 from pim.fusion.types import FusionConfig, FusionResult, SourceView, TargetSpec
 from pim.fusion.warp import WarpedLayer, self_layer, warp_to_target
 
+BASELINE_SOFTNESS = 0.05
+
 
 def fuse_frame(
     frames: Sequence[SourceView], target: TargetSpec, target_time: float, config: FusionConfig,
@@ -30,9 +32,9 @@ def fuse_frame(
     hits = np.zeros((n_layers, *shape), dtype=bool)
 
     for k, layer in enumerate(_layers(frames, indices, target, self_view if config.include_self else None)):
-        depths[k], hits[k], weights[k] = layer.depth, layer.hit, layer_weight(layer, config)
-    if config.include_self:
-        weights[0] *= np.float32(config.self_weight)
+        is_self = config.include_self and k == 0
+        depths[k], hits[k] = layer.depth, layer.hit
+        weights[k] = layer.hit * np.float32(config.self_weight) if is_self else layer_weight(layer, config)
 
     fused, weight_sum, count = aggregate(depths, weights, hits, config)
     return FusionResult(
@@ -56,7 +58,9 @@ def layer_weight(layer: WarpedLayer, config: FusionConfig) -> np.ndarray:
     if config.ray_angle_weight:
         # Ray-angle weight is cos(angle between source and target rays to the point), clipped to [0, 1].
         weight *= np.clip(layer.cos_angle, 0, 1)
-    if config.baseline_weight and layer.baseline > 0:
-        # Baseline weight is 1 / (1 + baseline / median source depth), with both in metres.
-        weight *= np.float32(1.0 / (1.0 + layer.baseline / layer.median_depth))
+    if config.baseline_weight and layer.hit.any():
+        # Baseline weight is r / (r + 0.05) with r = baseline / median valid source depth, so near-duplicate
+        # views get weights near 0. The self layer never gets it.
+        r = layer.baseline / layer.median_depth
+        weight *= np.float32(r / (r + BASELINE_SOFTNESS))
     return weight

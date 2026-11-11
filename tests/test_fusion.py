@@ -9,7 +9,7 @@ import pytest
 
 from pim.consistency.warp import warp_depth
 from pim.fusion.aggregate import aggregate
-from pim.fusion.engine import fuse_frame
+from pim.fusion.engine import fuse_frame, layer_weight
 from pim.fusion.select import select_sources
 from pim.fusion.types import FusionConfig, SourceView, TargetSpec, scale_intrinsics
 from pim.fusion.warp import warp_to_target
@@ -306,6 +306,31 @@ def test_wrong_poses_hurt():
         error = relative_error(fuse_frame(wrong, target_of(TARGET_POSE), 2 * DT, config).depth, truth)
         assert error.mean() > 2.5 * correct.mean()
         assert np.percentile(error, 90) > 5 * np.percentile(correct, 90)
+
+
+def test_baseline_weight_suppresses_near_duplicate_views():
+    scene = Scene()
+    target = target_of(TARGET_POSE)
+    config = FusionConfig(baseline_weight=True)
+    weights = {}
+    for name, offset in (("tiny", 0.002), ("large", 0.3)):
+        source = view(scene, pose((offset, 0.0, 0.0)), 0.0)
+        weights[name] = layer_weight(warp_to_target(source, target), config)
+        hit = weights[name] > 0
+        assert hit.any()
+        assert np.all((weights[name] >= 0) & (weights[name] < 1))
+    tiny, large = (np.median(weights[n][weights[n] > 0]) for n in ("tiny", "large"))
+    assert tiny < 0.1 and large > 0.6 and tiny < large / 5
+
+
+def test_baseline_weight_leaves_the_self_layer_alone():
+    scene = Scene()
+    own = view(scene, TARGET_POSE, 2 * DT)
+    result = fuse_frame([], target_of(TARGET_POSE), 2 * DT,
+                        FusionConfig(baseline_weight=True, ray_angle_weight=True, self_weight=0.7, keep_layers=True),
+                        self_view=own)
+    assert np.all(result.layer_weights[0][own.valid] == np.float32(0.7))
+    assert np.array_equal(result.depth[own.valid], own.depth[own.valid])
 
 
 TIMES = np.array([0, 1, 2, 4, 5, 6, 9, 10, 12, 13, 14, 15], dtype=np.float64) * DT
