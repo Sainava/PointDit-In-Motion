@@ -68,6 +68,8 @@ Dataset score = plain mean of per-image values, ×100 (`engine.py:790-796`, `:14
 - Baseline predictions ran as two parallel processes (one per T4). Their latencies (1,674–1,844 ms/frame) are 25–40% above single-process runs (~1,330 ms), likely from CPU contention (4 shared cores; preprocessing and compression partly inside the timed region) and T4 clock throttling under sustained load. Accuracy is unaffected.
 - **Never report latency from parallel runs.** Compute-sweep latency must come from a single process on one GPU with nothing else running.
 - The T4 has no native bf16 support, while upstream hard-codes bf16 autocast; fp16 may be much faster on T4. To test, checking numerical agreement first.
+- **Run options.** Every run.json written by `predict.py` records `options` (steps, dtype, target_tokens, model, input_downscale), defaults included. A run.json without `options` predates them and used steps 3, bf16, 1024 tokens, model L and no downscale; `pim.runs.run_options` reads such runs as exactly that. The `config` entry lists only options that differ from these defaults, so configs without the new keys keep their old config text and can resume old run directories.
+- **Sampling latency.** Each invocation records `mean_model_latency_ms` and `median_model_latency_ms` per sequence in run.json (`model.generate` only, CUDA synchronised before and after, over the frames that process predicted). Per-frame npz files are unchanged, and their `latency_ms` stays end to end.
 
 ## Analysis caveats
 
