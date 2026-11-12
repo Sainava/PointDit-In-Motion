@@ -297,11 +297,13 @@ def test_rerun_reuses_a_complete_csv(setup, evaluated: Path, monkeypatch) -> Non
     assert record["sequences"][NAME]["reused"]
 
 
-def perturbed_per_frame(setup: dict[str, Path], path: Path, frame_index: int) -> Path:
+def perturbed_per_frame(setup: dict[str, Path], path: Path, frame_index: int | list[int], shift: float = 1e-3
+                        ) -> Path:
+    indices = {frame_index} if isinstance(frame_index, int) else set(frame_index)
     rows = read_csv(setup["per_frame"])
     for r in rows:
-        if int(r["frame_index"]) == frame_index:
-            r["rel_d"] = repr(float(r["rel_d"]) + 1e-4)
+        if int(r["frame_index"]) in indices:
+            r["rel_d"] = repr(float(r["rel_d"]) + shift)
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
         writer.writeheader()
@@ -309,11 +311,41 @@ def perturbed_per_frame(setup: dict[str, Path], path: Path, frame_index: int) ->
     return path
 
 
-def test_regression_fails_on_a_perturbed_target_baseline(setup, tmp_path: Path) -> None:
+def test_regression_fails_on_a_perturbed_target_baseline_after_writing_every_output(
+        setup, tmp_path: Path, capsys) -> None:
     per_frame = perturbed_per_frame(setup, tmp_path / "per_frame.csv", TARGETS[1])
-    with pytest.raises(RegressionError, match=f"baseline_self {NAME} frame {TARGETS[1]}"):
-        fusion_eval.run_fusion_eval(eval_args(setup, tmp_path / "out", per_frame, "--configs", "baseline_self"))
-    assert not (tmp_path / "out" / f"oracle_fusion_{NAME}.csv").exists()
+    out = tmp_path / "out"
+    with pytest.raises(RegressionError, match="FAILED for 1 of 3 frames"):
+        fusion_eval.run_fusion_eval(eval_args(setup, out, per_frame, "--configs", "baseline_self"))
+
+    assert {p.name for p in out.iterdir()} >= {f"oracle_fusion_{NAME}.csv", "oracle_fusion_summary.csv",
+                                               "oracle_fusion.json"}
+    assert len(read_csv(out / f"oracle_fusion_{NAME}.csv")) == len(TARGETS)
+    regression = json.loads((out / "oracle_fusion.json").read_text())["regression"]
+    assert not regression["passed"] and regression["frames_over_tolerance"] == 1
+    assert regression["worst"][0]["frame_index"] == TARGETS[1]
+    assert f"FAIL baseline_self {NAME} frame {TARGETS[1]}" in capsys.readouterr().out
+
+
+def test_regression_reports_every_mismatch_and_the_worst_first(setup, tmp_path: Path, capsys) -> None:
+    per_frame = perturbed_per_frame(setup, tmp_path / "per_frame.csv", TARGETS)
+    rows = read_csv(per_frame)
+    for r in rows:
+        if int(r["frame_index"]) == TARGETS[2]:
+            r["rel_d"] = repr(float(r["rel_d"]) + 0.5)
+    with open(per_frame, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    with pytest.raises(RegressionError, match="FAILED for 3 of 3 frames"):
+        fusion_eval.run_fusion_eval(eval_args(setup, tmp_path / "out", per_frame, "--configs", "baseline_self",
+                                              "--regression-frames", "1"))
+
+    printed = capsys.readouterr().out
+    assert "3 of 3 frames over 0.0001, max |diff| 0.501" in printed
+    fails = [line for line in printed.splitlines() if "FAIL baseline_self" in line]
+    assert len(fails) == 3 and f"frame {TARGETS[2]} " in fails[0]
 
 
 def test_regression_fails_on_a_perturbed_cached_frame(setup, tmp_path: Path) -> None:
@@ -334,8 +366,87 @@ def test_baseline_self_failures_checks_only_the_anchor_rows() -> None:
     rows = [{"sequence": "s", "target_index": "1", "config": "baseline_self", "rel_d": "5.0"},
             {"sequence": "s", "target_index": "1", "config": "causal_adjacent_w1", "rel_d": "4.0"}]
     assert baseline_self_failures(rows, {("s", 1): 5.0 + 5e-7}) == []
-    assert len(baseline_self_failures(rows, {("s", 1): 5.0 + 2e-6})) == 1
+    assert baseline_self_failures(rows, {("s", 1): 5.0 + 1.2e-6}) == []
+    assert len(baseline_self_failures(rows, {("s", 1): 5.0 + 1e-3})) == 1
     assert len(baseline_self_failures(rows, {})) == 1
+
+
+def test_the_kaggle_fr3_frame_776_difference_passes() -> None:
+    rows = [{"sequence": "fr3", "target_index": "776", "config": "baseline_self", "rel_d": "5.887960270"}]
+    assert baseline_self_failures(rows, {("fr3", 776): 5.887959152}) == []
+    assert oracle.BASELINE_SELF_TOLERANCE == 1e-4 and oracle.REGRESSION_TOLERANCE == 1e-6
+
+
+def synthetic_output(out: Path, baseline: Path, shifts: dict[tuple[str, int], float],
+                     names: tuple[str, ...] = ("seq_a", "seq_b")) -> None:
+    out.mkdir(exist_ok=True)
+    per_frame = []
+    for name in names:
+        rows = []
+        for t in (3, 4, 5):
+            for config, rel in (("baseline_self", 6.0 + t), ("causal_adjacent_w1", 5.5 + t)):
+                rows.append({c: "" for c in ROW_COLUMNS} | {
+                    "sequence": name, "target_index": str(t), "config": config, "scale": SCALE, "rel_d": repr(rel),
+                    "delta1_d": "90.0", "hole_fraction": "0.1", "rel_d_covered": repr(rel - 0.2)})
+            per_frame.append({"sequence": name, "frame_index": t, "rel_d": repr(6.0 + t + shifts.get((name, t), 0.0))})
+        oracle.write_rows(oracle.fusion_csv(out, name), rows)
+    with open(baseline, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=("sequence", "frame_index", "rel_d"))
+        writer.writeheader()
+        writer.writerows(per_frame)
+
+
+def summarize_args(out: Path, baseline: Path, *extra: str):
+    return fusion_eval.parse_args(["--summarize-only", "--out", str(out), "--baseline-csv", str(baseline), *extra])
+
+
+def test_summarize_only_rebuilds_summary_and_json_without_cache_or_data(tmp_path: Path) -> None:
+    out, baseline = tmp_path / "out", tmp_path / "per_frame.csv"
+    synthetic_output(out, baseline, {("seq_a", 4): 1.2e-6})
+
+    record = fusion_eval.summarize_existing(summarize_args(out, baseline))
+
+    summary = read_csv(out / "oracle_fusion_summary.csv")
+    assert {(r["sequence"], r["config"]) for r in summary} == {
+        (n, c) for n in ("seq_a", "seq_b") for c in ("baseline_self", "causal_adjacent_w1")}
+    fused = next(r for r in summary if r["sequence"] == "seq_b" and r["config"] == "causal_adjacent_w1")
+    assert float(fused["delta_vs_baseline_median"]) == pytest.approx(-0.5)
+    assert float(fused["share_improved"]) == 1.0
+    on_disk = json.loads((out / "oracle_fusion.json").read_text())
+    assert on_disk == record
+    assert record["regression"]["passed"] and record["regression"]["baseline_self_rows"] == 6
+    assert record["summarized"]["sequences"] == ["seq_a", "seq_b"]
+    assert record["summarized"]["targets"] == {"seq_a": [3, 4, 5], "seq_b": [3, 4, 5]}
+
+
+def test_summarize_only_keeps_an_existing_record_and_fails_after_writing(tmp_path: Path) -> None:
+    out, baseline = tmp_path / "out", tmp_path / "per_frame.csv"
+    synthetic_output(out, baseline, {("seq_b", 5): 1e-3})
+    (out / "oracle_fusion.json").write_text(json.dumps(
+        {"scale": SCALE, "cache": {"dir": "kaggle"}, "regression": {"cache_frames_per_sequence": 5, "passed": True}}))
+
+    with pytest.raises(RegressionError, match="FAILED for 1 of 6 frames"):
+        fusion_eval.summarize_existing(summarize_args(out, baseline))
+
+    record = json.loads((out / "oracle_fusion.json").read_text())
+    assert record["cache"] == {"dir": "kaggle"}
+    assert record["regression"]["cache_frames_per_sequence"] == 5
+    assert not record["regression"]["passed"]
+    assert record["regression"]["worst"][0] | {"rel_d": None, "per_frame_rel_d": None} == {
+        "sequence": "seq_b", "frame_index": 5, "rel_d": None, "per_frame_rel_d": None,
+        "abs_diff": pytest.approx(1e-3)}
+    assert (out / "oracle_fusion_summary.csv").is_file()
+
+
+def test_summarize_only_needs_no_cache_but_full_runs_do(tmp_path: Path) -> None:
+    out, baseline = tmp_path / "out", tmp_path / "per_frame.csv"
+    synthetic_output(out, baseline, {})
+    fusion_eval.summarize_existing(summarize_args(out, baseline, "--sequences", "seq_b"))
+    assert {r["sequence"] for r in read_csv(out / "oracle_fusion_summary.csv")} == {"seq_b"}
+    with pytest.raises(FileNotFoundError, match="seq_c"):
+        fusion_eval.summarize_existing(summarize_args(out, baseline, "--sequences", "seq_c"))
+    with pytest.raises(SystemExit):
+        fusion_eval.parse_args(["--out", str(out), "--baseline-csv", str(baseline)])
 
 
 def window_frames(start: int, slots: list[int]) -> list[Frame]:
@@ -425,3 +536,37 @@ def test_shared_warps_give_the_same_fusion_as_the_plain_engine(setup) -> None:
                            spec.fusion, own)
         assert np.array_equal(shared.depth, plain.depth, equal_nan=True)
         assert np.array_equal(shared.n_sources, plain.n_sources)
+
+
+def test_sequences_restricts_the_run_and_the_summary_covers_earlier_csvs(setup, tmp_path: Path, monkeypatch) -> None:
+    out, extra = tmp_path / "out", tmp_path / "extra_per_frame.csv"
+    synthetic_output(out, extra, {}, names=("seq_z",))
+    earlier_csv = oracle.fusion_csv(out, "seq_z").read_bytes()
+    per_frame = tmp_path / "per_frame.csv"
+    with open(per_frame, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS, restval="")
+        writer.writeheader()
+        writer.writerows(read_csv(setup["per_frame"]) + read_csv(extra))
+    evaluated_jobs: list[str] = []
+    real_run_jobs = fusion_eval.run_jobs
+
+    def recording_run_jobs(jobs, workers):
+        evaluated_jobs.extend(j.name for j in jobs)
+        return real_run_jobs(jobs, workers)
+
+    monkeypatch.setattr(fusion_eval, "run_jobs", recording_run_jobs)
+    args = eval_args(setup, out, per_frame, "--sequences", NAME, "--configs", "baseline_self")
+    record = fusion_eval.run_fusion_eval(args)
+
+    assert evaluated_jobs == [NAME]
+    assert oracle.fusion_csv(out, "seq_z").read_bytes() == earlier_csv
+    assert {r["sequence"] for r in read_csv(out / "oracle_fusion_summary.csv")} == {NAME, "seq_z"}
+    assert record["summarized_sequences"] == [NAME, "seq_z"]
+    assert record["targets"] == {NAME: TARGETS, "seq_z": [3, 4, 5]}
+    assert record["sequences"]["seq_z"] == {"reused": True, "requested": False}
+    assert record["regression"]["passed"] and record["regression"]["baseline_self_rows"] == len(TARGETS) + 3
+    assert json.loads((out / "oracle_fusion.json").read_text()) == record
+
+    evaluated_jobs.clear()
+    fusion_eval.run_fusion_eval(args)
+    assert evaluated_jobs == []

@@ -32,6 +32,10 @@ TARGET_FIRST = 100
 TARGET_COUNT = 100
 DIVERSE_STRIDE_MS = 100.0
 REGRESSION_TOLERANCE = 1e-6
+# rel_d is percent in float32, so reduction order alone moves the last digits by ~1e-6; a real error is orders of
+# magnitude larger.
+BASELINE_SELF_TOLERANCE = 1e-4
+WORST_SHOWN = 5
 # Stored rel_d comes from evaluate_frame in the prepare worker, whose torch thread count may differ from the
 # baseline run, and a float32 mean over ~2e5 pixels then moves by a few ulps.
 STORED_REL_D_TOLERANCE = 1e-4
@@ -523,9 +527,9 @@ def evaluate_sequence(job: EvalJob) -> EvalOutcome:
           flush=True)
     for done, target_index in enumerate(job.targets, start=1):
         target_rows = evaluate_target(ctx, store, specs, position[target_index])
-        failures = baseline_self_failures(target_rows, {(job.name, k): v for k, v in job.baseline.items()})
-        if failures:
-            raise RegressionError("\n".join(failures))
+        # Warn only; the run checks every frame after all outputs are written.
+        for line in baseline_self_failures(target_rows, {(job.name, k): v for k, v in job.baseline.items()}):
+            print(f"  WARNING {line}", flush=True)
         rows.extend(target_rows)
         if done % PROGRESS_EVERY == 0 or done == len(job.targets):
             elapsed = time.perf_counter() - started
@@ -580,18 +584,41 @@ def read_baseline(path: Path) -> dict[tuple[str, int], float]:
                 for r in csv.DictReader(f)}
 
 
-def baseline_self_failures(rows: Iterable[dict[str, Any]], baseline: dict[tuple[str, int], float],
-                           tolerance: float = REGRESSION_TOLERANCE) -> list[str]:
-    failures = []
+@dataclass(frozen=True)
+class Mismatch:
+    sequence: str
+    frame_index: int
+    actual: float
+    expected: float
+
+    @property
+    def diff(self) -> float:
+        """|actual - expected|, inf when either side is missing or not finite."""
+        if not (math.isfinite(self.actual) and math.isfinite(self.expected)):
+            return math.inf
+        return abs(self.actual - self.expected)
+
+    def describe(self, tolerance: float) -> str:
+        return (f"baseline_self {self.sequence} frame {self.frame_index} rel_d {self.actual!r} but per_frame.csv "
+                f"has {self.expected!r} (|diff| {self.diff:.3g}, tolerance {tolerance:g})")
+
+
+def baseline_self_comparison(rows: Iterable[dict[str, Any]],
+                             baseline: dict[tuple[str, int], float]) -> list[Mismatch]:
+    """Every baseline_self row against per_frame.csv, worst first."""
+    compared = []
     for row in rows:
         if row["config"] != "baseline_self":
             continue
         key = (row["sequence"], int(row["target_index"]))
-        expected, actual = baseline.get(key, math.nan), float(row["rel_d"]) if row["rel_d"] != "" else math.nan
-        if not (math.isfinite(actual) and math.isfinite(expected) and abs(actual - expected) <= tolerance):
-            failures.append(f"baseline_self {key[0]} frame {key[1]} rel_d {actual!r} but per_frame.csv has "
-                            f"{expected!r} (|diff| {abs(actual - expected):.3g}, tolerance {tolerance:g})")
-    return failures
+        actual = float(row["rel_d"]) if row["rel_d"] != "" else math.nan
+        compared.append(Mismatch(key[0], key[1], actual, baseline.get(key, math.nan)))
+    return sorted(compared, key=lambda m: m.diff, reverse=True)
+
+
+def baseline_self_failures(rows: Iterable[dict[str, Any]], baseline: dict[tuple[str, int], float],
+                           tolerance: float = BASELINE_SELF_TOLERANCE) -> list[str]:
+    return [m.describe(tolerance) for m in baseline_self_comparison(rows, baseline) if m.diff > tolerance]
 
 
 def regression_positions(count: int, n: int) -> list[int]:

@@ -1,12 +1,14 @@
 """ORACLE-SCALE fusion, step 2. Fuse the GT-aligned depth cache of fusion_prepare.py into target frames for every
 configuration and score each fused depth against GT. This is an upper bound, since every source was aligned to its
 own GT first. Writes oracle_fusion_<sequence>.csv, oracle_fusion_summary.csv and oracle_fusion.json, and fails if the
-baseline_self rows or the cache do not reproduce per_frame.csv."""
+baseline_self rows or the cache do not reproduce per_frame.csv. The baseline_self check runs after every output is
+written. --summarize-only rebuilds the summary and json from existing per-sequence CSVs and reruns that check."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import multiprocessing
 import os
 import sys
@@ -23,10 +25,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pim.consistency.evaluation import atomic_write, init_worker  # noqa: E402
 from pim.evaluation import set_torch_threads  # noqa: E402
 from pim.fusion.oracle import (  # noqa: E402
-    DIVERSE_STRIDE_MS, PREPARE_RECORD, REGRESSION_TOLERANCE, SCALE, SCORE_THREADS, SEED, STORED_REL_D_TOLERANCE,
-    TARGET_COUNT, TARGET_FIRST, EvalJob, EvalOutcome, RegressionError, baseline_self_failures, cache_failures,
-    check_targets, complete, default_targets, evaluate_sequence, expected_keys, fusion_csv, load_window, read_baseline,
-    read_rows, regression_positions, resolve_specs, summarize, write_summary,
+    BASELINE_SELF_TOLERANCE, DIVERSE_STRIDE_MS, PREPARE_RECORD, REGRESSION_TOLERANCE, SCALE, SCORE_THREADS, SEED,
+    STORED_REL_D_TOLERANCE, TARGET_COUNT, TARGET_FIRST, WORST_SHOWN, EvalJob, EvalOutcome, Mismatch, RegressionError,
+    baseline_self_comparison, cache_failures, check_targets, complete, default_targets, evaluate_sequence,
+    expected_keys, fusion_csv, load_window, read_baseline, read_rows, regression_positions, resolve_specs, summarize,
+    write_summary,
 )
 from pim.paths import FORK_DIR, REPO_ROOT  # noqa: E402
 from pim.runs import available_cpus, git_commit, now  # noqa: E402
@@ -49,19 +52,25 @@ PROTOCOL = {
                   "into interior pixels and pixels inside depth_edge_band of the target GT",
     "controls": "shuffled_poses gives each source the pose of a different random window frame; pose_noise adds "
                 "per-axis Gaussian noise to source translations (mm) and rotation vectors (deg); both use --seed",
-    "regression": f"baseline_self rel_d equals per_frame.csv within {REGRESSION_TOLERANCE:g} for every target; the "
-                  f"cached aligned depth of a few frames per sequence rescored directly does too, and its stored "
-                  f"rel_d within {STORED_REL_D_TOLERANCE:g}",
+    "regression": f"baseline_self rel_d equals per_frame.csv within {BASELINE_SELF_TOLERANCE:g} (absolute, percent) "
+                  f"for every target; the cached aligned depth of a few frames per sequence rescored directly "
+                  f"equals it within {REGRESSION_TOLERANCE:g}, and its stored rel_d within "
+                  f"{STORED_REL_D_TOLERANCE:g}",
 }
+SUMMARY_CSV = "oracle_fusion_summary.csv"
+RECORD_JSON = "oracle_fusion.json"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cache", type=Path, required=True, help="aligned depth cache written by fusion_prepare.py")
-    parser.add_argument("--data-root", type=Path, required=True, help="folder containing the sequence folders")
+    parser.add_argument("--cache", type=Path, help="aligned depth cache written by fusion_prepare.py")
+    parser.add_argument("--data-root", type=Path, help="folder containing the sequence folders")
     parser.add_argument("--sequences-config", type=Path, default=Path("configs/sequences.yaml"))
     parser.add_argument("--baseline-csv", type=Path, required=True, help="per_frame.csv of the baseline evaluation")
-    parser.add_argument("--sequences", nargs="+", help="default is every sequence in the cache")
+    parser.add_argument("--sequences", nargs="+",
+                        help="sequences to evaluate, default every sequence in the cache; the summary and json "
+                             "still cover every oracle_fusion_<sequence>.csv in --out. With --summarize-only, the "
+                             "sequences to summarize")
     parser.add_argument("--targets", type=Path,
                         help="YAML mapping targets to {sequence: [kept-frame indices]}; default is window positions "
                              f"{TARGET_FIRST} to {TARGET_FIRST + TARGET_COUNT - 1}")
@@ -74,7 +83,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="torch threads for the float32 score reduction; must match the baseline evaluation run")
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--regression-frames", type=int, default=5, help="cached frames per sequence to rescore")
-    return parser.parse_args(argv)
+    parser.add_argument("--summarize-only", action="store_true",
+                        help="rebuild the summary and json from the oracle_fusion_<sequence>.csv files in --out and "
+                             "rerun the baseline_self check; needs no cache, data or predictions")
+    args = parser.parse_args(argv)
+    if not args.summarize_only and (args.cache is None or args.data_root is None):
+        parser.error("--cache and --data-root are required unless --summarize-only is given")
+    return args
 
 
 def validate(args: argparse.Namespace) -> None:
@@ -128,6 +143,50 @@ def run_jobs(jobs: list[EvalJob], workers: int) -> dict[str, EvalOutcome]:
     finally:
         executor.shutdown(wait=True, cancel_futures=True)
     return outcomes
+
+
+def baseline_self_report(comparison: list[Mismatch], tolerance: float = BASELINE_SELF_TOLERANCE) -> dict[str, Any]:
+    over = [m for m in comparison if m.diff > tolerance]
+    max_diff = max((m.diff for m in comparison), default=0.0)
+    print(f"\nbaseline_self against per_frame.csv. {len(over)} of {len(comparison)} frames over {tolerance:g}, "
+          f"max |diff| {max_diff:.3g}")
+    for m in comparison[:WORST_SHOWN]:
+        print(f"  {'FAIL' if m.diff > tolerance else 'ok  '} {m.describe(tolerance)}")
+    return {"baseline_self_rows": len(comparison), "baseline_self_tolerance": tolerance,
+            "frames_over_tolerance": len(over), "max_abs_diff": _json_float(max_diff),
+            "worst": [{"sequence": m.sequence, "frame_index": m.frame_index, "rel_d": _json_float(m.actual),
+                       "per_frame_rel_d": _json_float(m.expected), "abs_diff": _json_float(m.diff)}
+                      for m in comparison[:WORST_SHOWN]],
+            "passed": not over}
+
+
+def check_baseline_self(regression: dict[str, Any], out: Path) -> None:
+    if not regression["passed"]:
+        raise RegressionError(
+            f"regression check of baseline_self against per_frame.csv FAILED for "
+            f"{regression['frames_over_tolerance']} of {regression['baseline_self_rows']} frames (max |diff| "
+            f"{regression['max_abs_diff']}, tolerance {regression['baseline_self_tolerance']:g}); every output is "
+            f"already written to {out}")
+    print(f"regression passed. {regression['baseline_self_rows']} baseline_self rows match per_frame.csv")
+
+
+def _json_float(value: float) -> float | None:
+    return value if math.isfinite(value) else None
+
+
+def present_sequences(out: Path) -> list[str]:
+    """Sequences with an oracle_fusion_<sequence>.csv in out."""
+    prefix = fusion_csv(out, "").name.removesuffix(".csv")
+    return sorted(p.stem.removeprefix(prefix) for p in out.glob(f"{prefix}*.csv") if p.name != SUMMARY_CSV)
+
+
+def row_targets(rows: list[dict[str, str]], name: str) -> list[int]:
+    return sorted({int(r["target_index"]) for r in rows if r["sequence"] == name})
+
+
+def write_outputs(out: Path, summary: list[dict[str, Any]], record: dict[str, Any]) -> None:
+    write_summary(out / SUMMARY_CSV, summary)
+    atomic_write(out / RECORD_JSON, lambda f: f.write(json.dumps(record, indent=2) + "\n"))
 
 
 def fail(title: str, failures: list[str]) -> None:
@@ -187,12 +246,14 @@ def run_fusion_eval(args: argparse.Namespace) -> dict[str, Any]:
         print(f"{name} {fusion_csv(args.out, name).name} is complete, skipping")
     outcomes = run_jobs(todo, args.workers)
 
-    rows = [r for name in names for r in read_rows(fusion_csv(args.out, name))]
-    failures = baseline_self_failures(rows, baseline)
-    if failures:
-        fail("regression check of baseline_self against per_frame.csv", failures)
+    present = present_sequences(args.out)
+    earlier = [n for n in available if n in present and n not in names] + [n for n in present if n not in available]
+    summarized = [n for n in available if n in names or n in earlier] + [n for n in earlier if n not in available]
+    for name in earlier:
+        print(f"{name} {fusion_csv(args.out, name).name} was written by an earlier run, included in the summary")
+    rows = [r for name in summarized for r in read_rows(fusion_csv(args.out, name))]
     summary = summarize(rows)
-    write_summary(args.out / "oracle_fusion_summary.csv", summary)
+    regression = baseline_self_report(baseline_self_comparison(rows, baseline))
     record = {
         "scale": SCALE,
         "cache": {"dir": str(args.cache), "prepare": prepared},
@@ -201,20 +262,49 @@ def run_fusion_eval(args: argparse.Namespace) -> dict[str, Any]:
         "arguments": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
         "protocol": PROTOCOL,
         "configs": {s.name: s.describe() for s in specs},
-        "targets": targets,
+        "targets": {**targets, **{n: row_targets(rows, n) for n in earlier}},
+        "summarized_sequences": summarized,
         "sequences": {**{n: {"reused": True} for n in reused},
+                      **{n: {"reused": True, "requested": False} for n in earlier},
                       **{n: {**asdict(o), "reused": False} for n, o in outcomes.items()}},
-        "regression": {"baseline_self_rows": sum(r["config"] == "baseline_self" for r in rows),
-                       "cache_frames_per_sequence": args.regression_frames, "passed": True},
+        "regression": {**regression, "cache_frames_per_sequence": args.regression_frames},
         "cpus": available_cpus(),
         "start_time": start_time,
         "end_time": now(),
         "seconds": round(time.perf_counter() - started, 1),
     }
-    atomic_write(args.out / "oracle_fusion.json", lambda f: f.write(json.dumps(record, indent=2) + "\n"))
+    write_outputs(args.out, summary, record)
     print_table(summary)
-    print(f"\nregression passed. {record['regression']['baseline_self_rows']} baseline_self rows match per_frame.csv")
-    print(f"wrote {args.out}")
+    print(f"\nwrote {args.out}")
+    check_baseline_self(record["regression"], args.out)
+    return record
+
+
+def summarize_existing(args: argparse.Namespace) -> dict[str, Any]:
+    """Rebuild the summary and json from the per-sequence CSVs in --out, then rerun the baseline_self check."""
+    if not args.baseline_csv.is_file():
+        raise FileNotFoundError(f"baseline per_frame.csv {args.baseline_csv} not found")
+    names = args.sequences or present_sequences(args.out)
+    missing = [n for n in names if not fusion_csv(args.out, n).is_file()]
+    if not names or missing:
+        raise FileNotFoundError(f"no oracle_fusion_<sequence>.csv in {args.out} for {missing or 'any sequence'}")
+    rows = [r for name in names for r in read_rows(fusion_csv(args.out, name))]
+    summary = summarize(rows)
+    regression = baseline_self_report(baseline_self_comparison(rows, read_baseline(args.baseline_csv)))
+
+    path = args.out / RECORD_JSON
+    record = json.loads(path.read_text()) if path.is_file() else {"scale": SCALE, "protocol": PROTOCOL}
+    cache_frames = record.get("regression", {}).get("cache_frames_per_sequence")
+    record["regression"] = {**regression, "cache_frames_per_sequence": cache_frames}
+    record["summarized"] = {
+        "time": now(), "baseline_csv": str(args.baseline_csv), "sequences": names,
+        "configs": list(dict.fromkeys(r["config"] for r in rows)),
+        "targets": {n: row_targets(rows, n) for n in names},
+    }
+    write_outputs(args.out, summary, record)
+    print_table(summary)
+    print(f"\nwrote {args.out / SUMMARY_CSV} and {path}")
+    check_baseline_self(record["regression"], args.out)
     return record
 
 
@@ -222,7 +312,7 @@ def main() -> None:
     args = parse_args()
     os.environ["OMP_NUM_THREADS"] = str(args.threads)
     try:
-        run_fusion_eval(args)
+        summarize_existing(args) if args.summarize_only else run_fusion_eval(args)
     except RegressionError as error:
         print(f"\n{error}", file=sys.stderr)
         sys.exit(1)
