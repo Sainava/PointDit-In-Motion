@@ -24,13 +24,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pim.data.tum import Frame, TUMSequence, apply_window, load_sequence  # noqa: E402
 from pim.paths import DINOV3_REPO_DIR, FORK_DIR, REPO_ROOT  # noqa: E402
+from pim.runs import PRE_SWEEP_OPTIONS, run_options  # noqa: E402
 from pim.subsets import Subsets, load_subsets, restrict_frames, subset_sequences, subsets_record  # noqa: E402
 
 WARMUP_RUNS = 2
 CONFIG_KEYS = {"name", "inference"}
 INFERENCE_KEYS = {"init", "seed"}
-OPTIONAL_INFERENCE_KEYS = {"seed_mode"}
+OPTIONAL_INFERENCE_KEYS = {"seed_mode", "steps", "dtype", "target_tokens", "model", "input_downscale"}
 INITS = ("zeros", "noise")
+DTYPES = ("bf16", "fp16")
+MODELS = ("L", "B")
 # per_call: torch.manual_seed(seed) before every frame, so all frames of a size start from the same noise.
 # per_frame: frame i gets seed * PER_FRAME_SEED_STRIDE + i, independent noise per frame.
 SEED_MODES = ("per_call", "per_frame")
@@ -42,6 +45,7 @@ class Prediction(Protocol):
     points: np.ndarray
     valid_mask: np.ndarray
     latency_ms: float
+    model_latency_ms: float
 
     @property
     def peak_memory_gb(self) -> float: ...
@@ -57,12 +61,23 @@ class RunConfig:
     init: str
     seed: int | None
     seed_mode: str = "per_call"
+    steps: int = PRE_SWEEP_OPTIONS["steps"]
+    dtype: str = PRE_SWEEP_OPTIONS["dtype"]
+    target_tokens: int = PRE_SWEEP_OPTIONS["target_tokens"]
+    model: str = PRE_SWEEP_OPTIONS["model"]
+    input_downscale: int = PRE_SWEEP_OPTIONS["input_downscale"]
 
     def as_dict(self) -> dict[str, Any]:
+        """The config as written before the sweep options existed; options at their default are left out."""
         inference: dict[str, Any] = {"init": self.init, "seed": self.seed}
         if self.seed_mode != "per_call":
             inference["seed_mode"] = self.seed_mode
+        inference.update({k: v for k, v in self.options().items() if v != PRE_SWEEP_OPTIONS[k]})
         return {"name": self.name, "inference": inference}
+
+    def options(self) -> dict[str, Any]:
+        return {"steps": self.steps, "dtype": self.dtype, "target_tokens": self.target_tokens,
+                "model": self.model, "input_downscale": self.input_downscale}
 
     def frame_seed(self, frame_index: int) -> int | None:
         if self.seed_mode == "per_frame":
@@ -77,6 +92,9 @@ class SequenceStats:
     skipped: int
     mean_latency_ms: float
     peak_mem_gb: float
+    # Over the frames predicted by this process only; None when every frame was skipped.
+    mean_model_latency_ms: float | None = None
+    median_model_latency_ms: float | None = None
 
 
 def load_run_config(path: Path) -> RunConfig:
@@ -103,7 +121,16 @@ def load_run_config(path: Path) -> RunConfig:
         raise ValueError(f"{path}: inference.seed_mode must be one of {SEED_MODES}, got {seed_mode!r}")
     if seed_mode == "per_frame" and (init != "noise" or seed is None):
         raise ValueError(f"{path}: seed_mode per_frame needs init noise and an integer seed")
-    return RunConfig(name, init, seed, seed_mode)
+    options = {key: inference.get(key, default) for key, default in PRE_SWEEP_OPTIONS.items()}
+    for key in ("steps", "target_tokens", "input_downscale"):
+        value = options[key]
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ValueError(f"{path}: inference.{key} must be an integer of at least 1, got {value!r}")
+    if options["dtype"] not in DTYPES:
+        raise ValueError(f"{path}: inference.dtype must be one of {DTYPES}, got {options['dtype']!r}")
+    if options["model"] not in MODELS:
+        raise ValueError(f"{path}: inference.model must be one of {MODELS}, got {options['model']!r}")
+    return RunConfig(name, init, seed, seed_mode, **options)
 
 
 def _check_keys(mapping: dict, expected: set[str], where: str, optional: set[str] = frozenset()) -> None:
@@ -169,6 +196,7 @@ def predict_sequence(
         stale.unlink()
 
     predicted = skipped = 0
+    model_latencies: list[float] = []
     for frame in frames:
         path = prediction_path(sequence_dir, frame)
         if path.is_file():
@@ -179,10 +207,14 @@ def predict_sequence(
         seed = config.frame_seed(frame.index)
         result = runner.predict(frame.load_rgb(), init=config.init, seed=seed)
         save_prediction(path, frame, sequence.root, result, seed)
+        model_latencies.append(float(result.model_latency_ms))
         predicted += 1
 
     latencies, peaks = read_timings([prediction_path(sequence_dir, f) for f in frames])
-    return SequenceStats(len(frames), predicted, skipped, float(np.mean(latencies)), float(np.max(peaks)))
+    model_mean = float(np.mean(model_latencies)) if model_latencies else None
+    model_median = float(np.median(model_latencies)) if model_latencies else None
+    return SequenceStats(len(frames), predicted, skipped, float(np.mean(latencies)), float(np.max(peaks)),
+                         model_mean, model_median)
 
 
 def read_timings(paths: list[Path]) -> tuple[list[float], list[float]]:
@@ -220,12 +252,15 @@ def register_invocation(
     subsets: dict[str, dict[str, int]] | None = None,
 ) -> None:
     if not record:
-        record.update(name=config.name, config=config.as_dict(), start_time=None, end_time=None,
-                      frames_predicted=0, frames_skipped=0, sequences={}, invocations=[])
+        record.update(name=config.name, config=config.as_dict(), options=config.options(), start_time=None,
+                      end_time=None, frames_predicted=0, frames_skipped=0, sequences={}, invocations=[])
         if subsets is not None:
             record["subsets"] = subsets
     elif record["config"] != config.as_dict():
         raise ValueError(f"run.json holds config {record['config']} but this run uses {config.as_dict()}; "
+                         "change the run name or remove the run directory")
+    elif run_options(record) != config.options():
+        raise ValueError(f"run.json holds options {run_options(record)} but this run uses {config.options()}; "
                          "change the run name or remove the run directory")
     elif record.get("subsets") != subsets:
         raise ValueError(f"run.json holds subsets {record.get('subsets')} but this run uses {subsets}; "
@@ -251,7 +286,9 @@ def record_sequence(
         "end_time": now(),
     }
     _invocation(record, invocation_id)["sequences"][name] = {
-        "predicted": stats.predicted, "skipped": stats.skipped}
+        "predicted": stats.predicted, "skipped": stats.skipped,
+        "mean_model_latency_ms": stats.mean_model_latency_ms,
+        "median_model_latency_ms": stats.median_model_latency_ms}
     _refresh_totals(record)
 
 
@@ -310,7 +347,8 @@ def environment(device: str) -> dict[str, Any]:
 def load_runner(device: str, warmup_image: np.ndarray, config: RunConfig) -> Runner:
     from pim.model.runner import PointDiTRunner
 
-    runner = PointDiTRunner(device=device)
+    runner = PointDiTRunner(device=device, model=config.model, steps=config.steps, dtype=config.dtype,
+                            target_tokens=config.target_tokens, input_downscale=config.input_downscale)
     for _ in range(WARMUP_RUNS):
         runner.predict(warmup_image, init=config.init, seed=config.seed)
     return runner
@@ -362,8 +400,9 @@ def main() -> None:
         stats = predict_sequence(runner, config, sequence, windows[sequence.name], run_dir)
         with run_record(run_dir) as record:
             record_sequence(record, invocation["id"], sequence.name, summaries[sequence.name], stats)
+        model = "" if stats.mean_model_latency_ms is None else f" (model {stats.mean_model_latency_ms:.0f} ms)"
         print(f"{sequence.name}: {stats.frames} frames done ({stats.predicted} predicted, "
-              f"{stats.skipped} skipped), mean latency {stats.mean_latency_ms:.0f} ms, "
+              f"{stats.skipped} skipped), mean latency {stats.mean_latency_ms:.0f} ms{model}, "
               f"peak memory {stats.peak_mem_gb:.2f} GB", flush=True)
 
     with run_record(run_dir) as record:

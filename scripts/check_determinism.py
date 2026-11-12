@@ -12,7 +12,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pim.evaluation import prediction_path  # noqa: E402
-from pim.runs import read_run  # noqa: E402
+from pim.runs import read_run, run_options  # noqa: E402
 from pim.sampling import DETERMINISM_TOLERANCE, prediction_difference  # noqa: E402
 from pim.subsets import Subsets, check_run_covers, load_subsets  # noqa: E402
 
@@ -27,10 +27,13 @@ def check_zero_init(run: dict[str, Any], run_dir: Path) -> None:
 
 
 def compare(run_dir: Path, reference_dir: Path, subsets: Subsets, tolerance: float) -> list[dict[str, Any]]:
-    for directory in (run_dir, reference_dir):
-        run = read_run(directory)
+    runs = {directory: read_run(directory) for directory in (run_dir, reference_dir)}
+    for directory, run in runs.items():
         check_zero_init(run, directory)
         check_run_covers(run, subsets)
+    if run_options(runs[run_dir]) != run_options(runs[reference_dir]):
+        raise ValueError(f"{run_dir} used options {run_options(runs[run_dir])} but {reference_dir} used "
+                         f"{run_options(runs[reference_dir])}; determinism needs the same options")
     rows = []
     for name, frame_range in subsets.items():
         for index in range(frame_range.first, frame_range.last + 1):
