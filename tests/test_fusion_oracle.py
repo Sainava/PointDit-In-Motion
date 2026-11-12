@@ -17,8 +17,8 @@ from pim.data.tum import Frame, apply_window, load_sequence
 from pim.evaluation import COLUMNS, build_tasks, evaluate_task
 from pim.fusion import oracle
 from pim.fusion.oracle import (
-    ROW_COLUMNS, SCALE, SPECS, RegressionError, baseline_self_failures, cache_path, check_targets, default_targets,
-    noisy_pose, plan_sources, read_alignment, resolve_specs, shuffled_positions,
+    LEGACY_ROW_COLUMNS, ROW_COLUMNS, SCALE, SPEC_GROUPS, SPECS, RegressionError, baseline_self_failures, cache_path,
+    check_targets, default_targets, noisy_pose, plan_sources, read_alignment, resolve_specs, shuffled_positions,
 )
 from pim.metrics.geometry import FrameMetrics, backproject
 
@@ -596,8 +596,9 @@ def test_shared_warps_give_the_same_fusion_as_the_plain_engine(setup) -> None:
     store = oracle.ViewStore(setup["cache"], NAME, frames)
     target = TARGETS[0]
     fusion = oracle.TargetFusion(ctx, store, target)
-    for name in ("causal_diverse_w4", "centred_adjacent_w4", "causal_diverse_w4_rung_f"):
-        spec = SPECS[name]
+    edge = SPEC_GROUPS["edge"]
+    for spec in (SPECS["causal_diverse_w4"], SPECS["centred_adjacent_w4"], SPECS["causal_diverse_w4_rung_f"],
+                 edge["edge_src2_causal_diverse_w4"], edge["edge_src2_tgt3_centred_adjacent_w4"]):
         shared = fusion.fuse(spec, plan_sources(frames, target, spec.fusion))
         views = [SourceView(store.aligned(p), oracle.source_valid(store.aligned(p)), f.T_world_cam, K, f.timestamp)
                  for p, f in enumerate(frames) if p != target]
@@ -641,3 +642,127 @@ def test_sequences_restricts_the_run_and_the_summary_covers_earlier_csvs(setup, 
     evaluated_jobs.clear()
     fusion_eval.run_fusion_eval(args)
     assert evaluated_jobs == []
+
+
+EDGE_NAMES = ["baseline_self"] + [
+    f"{prefix}_{base}" for base in ("causal_diverse_w4", "centred_adjacent_w4", "causal_adjacent_w4")
+    for prefix in ("rungb", "edge_src2", "edge_src5", "edge_tgt3", "edge_src2_tgt3")
+] + ["gt_ceiling_causal_adjacent_w1_noself", "gt_ceiling_causal_diverse_w4_noself_src2_tgt3"]
+
+
+def test_edge_group_names_and_settings_and_the_ladder_is_unchanged() -> None:
+    edge = SPEC_GROUPS["edge"]
+    assert list(edge) == EDGE_NAMES
+    assert SPEC_GROUPS["ladder"] is SPECS and len(SPECS) == 36
+    assert [s.name for s in resolve_specs(None)] == list(SPECS)
+    assert [s.name for s in resolve_specs(None, "edge")] == EDGE_NAMES
+    with pytest.raises(ValueError, match="unknown"):
+        resolve_specs(["causal_diverse_w4_rung_d"], "edge")
+    for spec in SPECS.values():
+        assert spec.fusion.source_edge_mask_px is None and spec.fusion.target_edge_fallback_px is None
+        assert spec.gt_target_fallback_px is None
+        assert "source_edge_mask_px" not in spec.describe()["fusion"] and "gt_target_fallback_px" not in spec.describe()
+    assert edge["baseline_self"] == SPECS["baseline_self"]
+    for base in ("causal_diverse_w4", "centred_adjacent_w4", "causal_adjacent_w4"):
+        rung_b = edge[f"rungb_{base}"].fusion
+        assert rung_b == replace(SPECS[base].fusion, aggregator="weighted_median")
+        assert not rung_b.front_layer and rung_b.include_self
+        assert edge[f"edge_src2_{base}"].fusion == replace(rung_b, source_edge_mask_px=2)
+        assert edge[f"edge_src5_{base}"].fusion == replace(rung_b, source_edge_mask_px=5)
+        assert edge[f"edge_tgt3_{base}"].fusion == replace(rung_b, target_edge_fallback_px=3)
+        assert edge[f"edge_src2_tgt3_{base}"].fusion == replace(rung_b, source_edge_mask_px=2,
+                                                                target_edge_fallback_px=3)
+    assert edge["rungb_causal_diverse_w4"].key == SPECS["causal_diverse_w4_rung_b"].key
+    splat = edge["gt_ceiling_causal_adjacent_w1_noself"]
+    assert splat.depth == "gt" and splat.fusion == replace(SPECS["causal_adjacent_w1"].fusion, include_self=False)
+    both = edge["gt_ceiling_causal_diverse_w4_noself_src2_tgt3"]
+    assert both.depth == "gt" and both.gt_target_fallback_px == 3 and both.poses == "true"
+    assert both.fusion == replace(SPECS["causal_diverse_w4"].fusion, aggregator="weighted_median",
+                                  include_self=False, source_edge_mask_px=2)
+    assert not any(s.poses != "true" for s in edge.values())
+
+
+def test_rel_d_interior_and_edge_combine_to_rel_d_on_a_synthetic_frame() -> None:
+    from pim.fusion.types import FusionResult
+    from pim.metrics.error_maps import depth_edge_band
+
+    gt = render(camera_pose(0.2)).astype(np.float32)
+    gt_valid = np.ones((H, W), dtype=bool)
+    gt_valid[:4, :6] = False
+    fused = (gt * (1 + 0.04 * smooth_field(3))).astype(np.float32)
+    n_sources = np.ones((H, W), dtype=np.int32)
+    n_sources[20:26, 10:30] = 0
+    fused[n_sources == 0] = np.nan
+    result = FusionResult(fused, n_sources.astype(np.float32), n_sources, ())
+    fallback = (gt * 1.07).astype(np.float32)
+    scores = oracle.score_fused(result, fallback, gt, gt_valid)
+    band = depth_edge_band(gt, gt_valid)
+    n_edge, n_interior = int((band & gt_valid).sum()), int((~band & gt_valid).sum())
+    assert n_edge > 0 and n_interior > 0
+    combined = (n_interior * scores["rel_d_interior"] + n_edge * scores["rel_d_edge"]) / (n_edge + n_interior)
+    assert combined == pytest.approx(scores["rel_d"], rel=1e-5)
+    assert scores["rel_d_edge"] != pytest.approx(scores["rel_d_interior"], rel=1e-3)
+    assert oracle.score_fused(result, fallback, gt, gt_valid, target_band=band) == scores
+
+
+def test_rel_d_split_columns_are_in_every_row_and_the_summary(evaluated: Path) -> None:
+    rows = read_csv(evaluated / f"oracle_fusion_{NAME}.csv")
+    for r in rows:
+        assert math.isfinite(float(r["rel_d_interior"])) and math.isfinite(float(r["rel_d_edge"])), r["config"]
+    summary = read_csv(evaluated / "oracle_fusion_summary.csv")
+    assert {"rel_d_interior_median", "rel_d_edge_median"} <= set(summary[0])
+    assert all(math.isfinite(float(r["rel_d_edge_median"])) for r in summary)
+
+
+def test_legacy_csvs_without_the_split_columns_are_still_read(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.csv"
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=LEGACY_ROW_COLUMNS)
+        writer.writeheader()
+        writer.writerow({c: "" for c in LEGACY_ROW_COLUMNS} | {"sequence": "s", "target_index": "1",
+                                                                "config": "baseline_self", "rel_d": "5.0"})
+    rows = oracle.read_rows(path)
+    assert tuple(rows[0]) == ROW_COLUMNS and rows[0]["rel_d_edge"] == "" and rows[0]["rel_d"] == "5.0"
+    assert not oracle.complete(path, {("s", 1, "baseline_self")})
+
+
+@pytest.fixture(scope="module")
+def evaluated_edge(setup, tmp_path_factory) -> Path:
+    out = tmp_path_factory.mktemp("eval_edge")
+    fusion_eval.run_fusion_eval(eval_args(setup, out, None, "--config-group", "edge"))
+    return out
+
+
+def test_edge_group_run_writes_its_configs_and_passes_the_regression(setup, evaluated_edge: Path,
+                                                                     evaluated: Path) -> None:
+    rows = read_csv(evaluated_edge / f"oracle_fusion_{NAME}.csv")
+    assert {(int(r["target_index"]), r["config"]) for r in rows} == {(t, c) for t in TARGETS for c in EDGE_NAMES}
+    record = json.loads((evaluated_edge / "oracle_fusion.json").read_text())
+    assert record["config_group"] == "edge" and record["regression"]["passed"]
+    assert list(record["configs"]) == EDGE_NAMES
+    assert record["configs"]["gt_ceiling_causal_diverse_w4_noself_src2_tgt3"]["gt_target_fallback_px"] == 3
+    ladder = {(r["target_index"], r["config"]): r for r in read_csv(evaluated / f"oracle_fusion_{NAME}.csv")}
+    for r in rows:
+        if r["config"] in ("baseline_self", "rungb_causal_diverse_w4"):
+            same = ladder[(r["target_index"], "causal_diverse_w4_rung_b" if r["config"] != "baseline_self"
+                           else "baseline_self")]
+            assert {k: v for k, v in r.items() if k != "config"} == {k: v for k, v in same.items() if k != "config"}
+    for r in rows:
+        if r["config"].startswith("gt_ceiling_"):
+            assert all(math.isfinite(float(r[c])) for c in ("rel_d_covered_interior", "rel_d_covered_edge"))
+        else:
+            assert (r["rel_d_covered_interior"], r["rel_d_covered_edge"]) == ("", "")
+    ceiling = mean_rel_d(rows, "gt_ceiling_causal_diverse_w4_noself_src2_tgt3", "rel_d_edge")
+    assert ceiling < mean_rel_d(rows, "gt_ceiling_causal_adjacent_w1_noself", "rel_d_edge")
+    summary = read_csv(evaluated_edge / "oracle_fusion_summary.csv")
+    assert [r["config"] for r in summary] == EDGE_NAMES
+
+
+def test_config_groups_never_share_an_output_folder(setup, evaluated_edge: Path, tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    shutil.copytree(evaluated_edge, out)
+    with pytest.raises(ValueError, match="config-group edge"):
+        fusion_eval.run_fusion_eval(eval_args(setup, out))
+    with pytest.raises(ValueError, match="config-group edge"):
+        fusion_eval.summarize_existing(summarize_args(out, setup["per_frame"]))
+    fusion_eval.summarize_existing(summarize_args(out, setup["per_frame"], "--config-group", "edge"))

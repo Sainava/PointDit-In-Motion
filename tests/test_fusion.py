@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import time
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pytest
 
 from pim.consistency.warp import warp_depth
 from pim.fusion.aggregate import aggregate
-from pim.fusion.engine import fuse_frame, layer_weight
+from pim.fusion.engine import fuse_frame, layer_weight, view_edge_band, without_band
 from pim.fusion.select import select_sources
 from pim.fusion.types import FusionConfig, SourceView, TargetSpec, scale_intrinsics
-from pim.fusion.warp import warp_to_target
+from pim.fusion.warp import self_layer, warp_to_target
+from pim.metrics.error_maps import depth_edge_band
 
 H, W = 40, 52
 K = np.array([[60.0, 0.0, 25.5], [0.0, 60.0, 19.5], [0.0, 0.0, 1.0]])
@@ -395,3 +396,87 @@ def test_warp_and_aggregate_are_vectorised():
         aggregate(stack[0], stack[1], stack[1] > 0, FusionConfig(aggregator=aggregator, front_layer=True,
                                                                  min_support=2))
     assert time.perf_counter() - start < 3.0
+
+
+def forbidden_band(view: SourceView, width_px: int) -> np.ndarray:
+    raise AssertionError("an edge band was computed with both edge options off")
+
+
+def test_edge_options_off_leave_fusion_bitwise_unchanged():
+    scene = Scene()
+    frames = held_out_frames(scene)
+    own = view(scene, TARGET_POSE, 2 * DT, scene.render(TARGET_POSE)[0] * 1.03)
+    target = target_of(TARGET_POSE)
+    for config in (FusionConfig(window=2, keep_layers=True),
+                   FusionConfig(window=2, aggregator="weighted_median", include_self=False, keep_layers=True)):
+        default = fuse_frame(frames, target, 2 * DT, config, own)
+        explicit = fuse_frame(frames, target, 2 * DT, replace(config, source_edge_mask_px=None,
+                                                              target_edge_fallback_px=None), own,
+                              edge_band=forbidden_band, mask_source=forbidden_band)
+        # Rebuilt from the warp and aggregate steps alone, independent of the engine's new branches.
+        layers = ([self_layer(own, 1)] if config.include_self else []) + [warp_to_target(frames[i], target)
+                                                                         for i in default.source_indices]
+        depths = np.stack([l.depth for l in layers])
+        hits = np.stack([l.hit for l in layers])
+        manual = aggregate(depths, hits.astype(np.float32), hits, config)
+        for result in (default, explicit):
+            assert np.array_equal(result.depth, manual[0], equal_nan=True)
+            assert np.array_equal(result.weight_sum, manual[1]) and np.array_equal(result.n_sources, manual[2])
+        assert np.array_equal(default.layers, explicit.layers, equal_nan=True)
+
+
+def test_source_edge_mask_removes_the_band_before_warping_and_keeps_the_interior():
+    scene = Scene()
+    source = view(scene, SOURCE_POSES[1], DT)
+    target = target_of(TARGET_POSE)
+    seen: list[SourceView] = []
+
+    def recording_warp(v: SourceView, t: TargetSpec):
+        seen.append(v)
+        return warp_to_target(v, t)
+
+    config = FusionConfig(window=1, mode="causal", include_self=False, keep_layers=True)
+    plain = fuse_frame([source], target, 2 * DT, config)
+    masked = fuse_frame([source], target, 2 * DT, replace(config, source_edge_mask_px=2), warp=recording_warp)
+
+    band = view_edge_band(source, 2)
+    assert band.any() and not np.array_equal(band, source.valid)
+    assert np.array_equal(seen[0].valid, source.valid & ~band)
+    assert np.array_equal(seen[0].depth, source.depth)
+    plain_hit, masked_hit = np.isfinite(plain.layers[0]), np.isfinite(masked.layers[0])
+    assert masked_hit.sum() < plain_hit.sum() and not (masked_hit & ~plain_hit).any()
+    truth = scene.render(TARGET_POSE)[0]
+    interior = ~dilate(depth_edge_band(truth, np.isfinite(truth), width_px=2), 4)
+    assert interior[plain_hit].mean() > 0.5
+    assert np.array_equal(masked.layers[0][interior], plain.layers[0][interior], equal_nan=True)
+    assert (plain_hit & ~masked_hit & ~interior).any()
+
+
+def test_target_edge_fallback_takes_the_own_depth_in_the_band_only():
+    scene = Scene()
+    frames = held_out_frames(scene)
+    own = view(scene, TARGET_POSE, 2 * DT, scene.render(TARGET_POSE)[0] * 1.05)
+    for grid_scale in (1, 2):
+        target = target_of(TARGET_POSE, grid_scale)
+        config = FusionConfig(window=2, aggregator="weighted_median", self_weight=0.5)
+        plain = fuse_frame(frames, target, 2 * DT, config, own)
+        fallback = fuse_frame(frames, target, 2 * DT, replace(config, target_edge_fallback_px=3), own)
+        band = view_edge_band(own, 3).repeat(grid_scale, axis=0).repeat(grid_scale, axis=1)
+        own_grid = self_layer(own, grid_scale).depth
+        assert band.any() and (~band).any()
+        assert np.array_equal(fallback.depth[band], own_grid[band])
+        assert not np.allclose(plain.depth[band], own_grid[band])
+        assert np.array_equal(fallback.depth[~band], plain.depth[~band], equal_nan=True)
+        assert np.all(fallback.n_sources[band] == 1) and np.all(fallback.weight_sum[band] == np.float32(0.5))
+        assert np.array_equal(fallback.n_sources[~band], plain.n_sources[~band])
+    with pytest.raises(ValueError, match="include_self"):
+        FusionConfig(window=2, include_self=False, target_edge_fallback_px=3)
+    with pytest.raises(ValueError, match="source_edge_mask_px"):
+        FusionConfig(source_edge_mask_px=-1)
+
+
+def test_without_band_only_narrows_the_valid_mask():
+    source = view(Scene(), SOURCE_POSES[0], 0.0)
+    band = view_edge_band(source, 1)
+    narrowed = without_band(source, band)
+    assert np.array_equal(narrowed.valid, source.valid & ~band) and narrowed.depth is source.depth

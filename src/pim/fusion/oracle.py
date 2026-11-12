@@ -18,10 +18,10 @@ from pim.consistency.evaluation import atomic_write, peak_memory_mib
 from pim.consistency.warp import depth_pose
 from pim.data.tum import Frame, TUMSequence, apply_window, load_sequence, read_groundtruth
 from pim.evaluation import load_prediction, prediction_path, set_torch_threads
-from pim.fusion.engine import fuse_frame
+from pim.fusion.engine import edge_fallback, fuse_frame, view_edge_band, without_band
 from pim.fusion.select import select_sources
 from pim.fusion.types import FusionConfig, FusionResult, SourceView, TargetSpec
-from pim.fusion.warp import WarpedLayer, warp_to_target
+from pim.fusion.warp import WarpedLayer, self_layer, warp_to_target
 from pim.metrics.error_maps import depth_edge_band, rel_d_by_depth_tertile, relative_depth_error
 from pim.metrics.geometry import FrameMetrics, backproject, evaluate_frame
 from pim.paths import configure_fork
@@ -57,15 +57,27 @@ RUNGS: dict[str, dict[str, Any]] = {
 }
 # One factor at a time, each sweep starting from the noise-free level.
 POSE_NOISE_LEVELS = ((0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (20.0, 0.0), (0.0, 0.25), (0.0, 0.5), (0.0, 1.0))
-ROW_COLUMNS = (
+EDGE_BASES = ("causal_diverse_w4", "centred_adjacent_w4", "causal_adjacent_w4")
+EDGE_VARIANTS: dict[str, dict[str, Any]] = {
+    "rungb": {},
+    "edge_src2": {"source_edge_mask_px": 2},
+    "edge_src5": {"source_edge_mask_px": 5},
+    "edge_tgt3": {"target_edge_fallback_px": 3},
+    "edge_src2_tgt3": {"source_edge_mask_px": 2, "target_edge_fallback_px": 3},
+}
+CONFIG_GROUPS = ("ladder", "edge")
+EDGE_COLUMNS = ("rel_d_interior", "rel_d_edge")
+LEGACY_ROW_COLUMNS = (
     "sequence", "target_index", "config", "scale", "rel_d", "delta1_d", "rel_d_near", "rel_d_mid", "rel_d_far",
     "hole_fraction", "median_n_sources", "rel_d_covered", "rel_d_covered_interior", "rel_d_covered_edge",
     "n_selected", "sources",
 )
+"""Columns of CSVs written before rel_d_interior and rel_d_edge existed; read with those two left empty."""
+ROW_COLUMNS = (*LEGACY_ROW_COLUMNS[:-2], *EDGE_COLUMNS, *LEGACY_ROW_COLUMNS[-2:])
 SUMMARY_COLUMNS = (
     "sequence", "config", "scale", "targets", "rel_d_median", "delta_vs_baseline_median", "rel_change_pct_median",
     "share_improved", "hole_fraction_median", "rel_d_covered_median", "rel_d_covered_interior_median",
-    "rel_d_covered_edge_median",
+    "rel_d_covered_edge_median", "rel_d_interior_median", "rel_d_edge_median",
 )
 PROGRESS_EVERY = 10
 
@@ -84,16 +96,27 @@ class FusionSpec:
     """true, shuffled (each source gets another window frame's pose) or noisy."""
     noise_mm: float = 0.0
     noise_deg: float = 0.0
+    gt_target_fallback_px: int | None = None
+    """GT ceiling only. Pixels in this-width depth edge band of the target GT take the target GT after fusion, as
+    target_edge_fallback_px does with the target's own layer, but without include_self."""
+
+    def __post_init__(self) -> None:
+        if self.gt_target_fallback_px is not None and self.depth != "gt":
+            raise ValueError(f"{self.name} gt_target_fallback_px needs depth gt")
 
     @property
     def key(self) -> tuple[Any, ...]:
         poses = "true" if self.poses == "noisy" and self.noise_mm == 0 and self.noise_deg == 0 else self.poses
         noise = (self.noise_mm, self.noise_deg) if poses == "noisy" else (0.0, 0.0)
-        return self.fusion, self.depth, poses, noise
+        return self.fusion, self.depth, poses, noise, self.gt_target_fallback_px
 
     def describe(self) -> dict[str, Any]:
+        # Edge options are listed only when set, so ladder descriptions are as before.
+        edge = ("source_edge_mask_px", "target_edge_fallback_px")
+        fusion = {k: v for k, v in vars(self.fusion).items() if k != "keep_layers" and not (k in edge and v is None)}
+        extra = {} if self.gt_target_fallback_px is None else {"gt_target_fallback_px": self.gt_target_fallback_px}
         return {"depth": self.depth, "poses": self.poses, "noise_mm": self.noise_mm, "noise_deg": self.noise_deg,
-                "fusion": {k: v for k, v in vars(self.fusion).items() if k != "keep_layers"}}
+                **extra, "fusion": fusion}
 
 
 def build_specs() -> dict[str, FusionSpec]:
@@ -127,13 +150,39 @@ def build_specs() -> dict[str, FusionSpec]:
 SPECS = build_specs()
 
 
-def resolve_specs(names: Sequence[str] | None) -> list[FusionSpec]:
-    """The requested configurations in registry order, always with baseline_self as the regression anchor."""
-    wanted = set(SPECS) if names is None else set(names) | {"baseline_self"}
-    unknown = sorted(wanted - set(SPECS))
+def build_edge_specs(ladder: dict[str, FusionSpec] = SPECS) -> dict[str, FusionSpec]:
+    """Edge-aware options on median-aggregated bases, with GT ceilings for the splat and for both options."""
+    specs = [ladder["baseline_self"]]
+    for base in EDGE_BASES:
+        median = replace(ladder[base].fusion, **RUNGS["b"])
+        for prefix, changes in EDGE_VARIANTS.items():
+            specs.append(FusionSpec(f"{prefix}_{base}", replace(median, **changes)))
+    specs.append(FusionSpec("gt_ceiling_causal_adjacent_w1_noself",
+                            replace(ladder["causal_adjacent_w1"].fusion, include_self=False), depth="gt"))
+    specs.append(FusionSpec(f"gt_ceiling_{GROUND_TRUTH_BASE}_noself_src2_tgt3",
+                            replace(ladder[GROUND_TRUTH_BASE].fusion, **RUNGS["b"], include_self=False,
+                                    source_edge_mask_px=2), depth="gt", gt_target_fallback_px=3))
+    return {s.name: s for s in specs}
+
+
+SPEC_GROUPS = {"ladder": SPECS, "edge": build_edge_specs()}
+
+
+def group_specs(group: str) -> dict[str, FusionSpec]:
+    if group not in SPEC_GROUPS:
+        raise ValueError(f"unknown configuration group {group!r}; known are {list(SPEC_GROUPS)}")
+    return SPEC_GROUPS[group]
+
+
+def resolve_specs(names: Sequence[str] | None, group: str = "ladder") -> list[FusionSpec]:
+    """The requested configurations of the group in registry order, always with baseline_self as the regression
+    anchor."""
+    registry = group_specs(group)
+    wanted = set(registry) if names is None else set(names) | {"baseline_self"}
+    unknown = sorted(wanted - set(registry))
     if unknown:
-        raise ValueError(f"unknown fusion configurations {unknown}; known are {list(SPECS)}")
-    return [s for name, s in SPECS.items() if name in wanted]
+        raise ValueError(f"unknown fusion configurations {unknown} in group {group}; known are {list(registry)}")
+    return [s for name, s in registry.items() if name in wanted]
 
 
 # Cache of per-frame GT-aligned depth.
@@ -317,10 +366,13 @@ def upstream_depth_metrics(depth: np.ndarray, gt_depth: np.ndarray, gt_valid: np
 
 
 def score_fused(result: FusionResult, fallback: np.ndarray, gt_depth: np.ndarray, gt_valid: np.ndarray,
-                edge_band: np.ndarray | None = None) -> dict[str, float]:
+                edge_band: np.ndarray | None = None, target_band: np.ndarray | None = None) -> dict[str, float]:
     """Scored against GT on GT-valid pixels without realignment; holes take the target's own aligned depth. With
-    edge_band, rel_d_covered is also split into interior pixels and pixels inside the band."""
+    edge_band, rel_d_covered is also split into interior pixels and pixels inside the band. rel_d is always split
+    into rel_d_interior and rel_d_edge over target_band, by default depth_edge_band of the target GT."""
     valid = gt_valid.astype(bool)
+    if target_band is None:
+        target_band = depth_edge_band(gt_depth, valid)
     hole = result.hole
     depth = np.where(hole, fallback, result.depth).astype(np.float32)
     rel_d, delta1_d = upstream_depth_metrics(depth, gt_depth, valid)
@@ -335,6 +387,8 @@ def score_fused(result: FusionResult, fallback: np.ndarray, gt_depth: np.ndarray
         "rel_d_covered": _mean_x100(error[covered]),
         "rel_d_covered_interior": math.nan if edge_band is None else _mean_x100(error[covered & ~edge_band]),
         "rel_d_covered_edge": math.nan if edge_band is None else _mean_x100(error[covered & edge_band]),
+        "rel_d_interior": _mean_x100(error[valid & ~target_band]),
+        "rel_d_edge": _mean_x100(error[valid & target_band]),
     }
 
 
@@ -358,6 +412,7 @@ class EvalJob:
     seed: int = SEED
     threads: int = 1
     score_threads: int = SCORE_THREADS
+    config_group: str = "ladder"
 
 
 @dataclass(frozen=True)
@@ -378,12 +433,22 @@ class ViewStore:
         self._cache_dir, self._name, self._frames = cache_dir, name, frames
         self._aligned: dict[int, np.ndarray] = {}
         self._gt: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        self._bands: dict[tuple[str, int, int], np.ndarray] = {}
 
     def retain(self, positions: Iterable[int]) -> None:
         keep = set(positions)
         for store in (self._aligned, self._gt):
             for position in [p for p in store if p not in keep]:
                 del store[position]
+        for key in [k for k in self._bands if k[1] not in keep]:
+            del self._bands[key]
+
+    def band(self, depth: str, position: int, width_px: int, compute: Callable[[], np.ndarray]) -> np.ndarray:
+        """Edge band of a frame's oracle or GT depth at a width, computed once while the frame is held."""
+        key = (depth, position, width_px)
+        if key not in self._bands:
+            self._bands[key] = compute()
+        return self._bands[key]
 
     @property
     def held(self) -> int:
@@ -453,6 +518,18 @@ class TargetFusion:
             self._layers[key] = warp_to_target(view, target)
         return self._layers[key]
 
+    def _band(self, view: SourceView, width_px: int) -> np.ndarray:
+        depth, position = self._keys[id(view)][:2]
+        return self.store.band(depth, position, width_px, lambda: view_edge_band(view, width_px))
+
+    def _masked(self, view: SourceView, width_px: int) -> SourceView:
+        key = (*self._keys[id(view)], "edge_masked", width_px)
+        if key not in self._views:
+            masked = without_band(view, self._band(view, width_px))
+            self._views[key] = masked
+            self._keys[id(masked)] = key
+        return self._views[key]
+
     def source(self, spec: FusionSpec, position: int, pose_position: int) -> SourceView:
         gt = spec.depth == "gt"
         if spec.poses == "shuffled":
@@ -474,10 +551,14 @@ class TargetFusion:
                          lambda: self.ctx.pose(self.position, spec.depth == "gt"))
         shape = self.store.aligned(self.position).shape
         result = fuse_frame(views, TargetSpec(own.T_world_cam, self.ctx.K, shape), self.target.timestamp,
-                            spec.fusion, own if spec.fusion.include_self else None, warp=self._warp)
+                            spec.fusion, own if spec.fusion.include_self else None, warp=self._warp,
+                            edge_band=self._band, mask_source=self._masked)
         if result.source_indices != tuple(range(len(views))):
             raise RuntimeError(f"{self.ctx.name} target {self.target.index} {spec.name} the engine chose sources "
                                f"{result.source_indices} from the planned {sources}")
+        if spec.gt_target_fallback_px is not None:
+            layer = self_layer(own, 1)
+            result = edge_fallback(result, layer.depth, layer.hit, self._band(own, spec.gt_target_fallback_px))
         return result
 
 
@@ -489,14 +570,14 @@ def evaluate_target(ctx: SequenceContext, store: ViewStore, specs: Sequence[Fusi
     fallback = store.aligned(target_position)
     gt_depth, gt_valid = store.gt(target_position)
     fusion = TargetFusion(ctx, store, target_position)
-    edge_band = depth_edge_band(gt_depth, gt_valid) if any(s.depth == "gt" for s in specs) else None
+    edge_band = depth_edge_band(gt_depth, gt_valid)
     scored: dict[tuple[Any, ...], dict[str, float]] = {}
     rows = []
     for spec in specs:
         if spec.key not in scored:
             result = fusion.fuse(spec, plans[spec.name])
             scored[spec.key] = score_fused(result, fallback, gt_depth, gt_valid,
-                                           edge_band if spec.depth == "gt" else None)
+                                           edge_band if spec.depth == "gt" else None, edge_band)
         rows.append({
             "sequence": ctx.name, "target_index": target.index, "config": spec.name, "scale": SCALE,
             **{k: _cell(v) for k, v in scored[spec.key].items()},
@@ -516,7 +597,7 @@ def evaluate_sequence(job: EvalJob) -> EvalOutcome:
     set_torch_threads(job.score_threads)
     sequence, frames = load_window(job.name, job.data_root, job.sequences_config)
     check_targets(job.name, frames, job.targets)
-    specs = resolve_specs(job.spec_names)
+    specs = resolve_specs(job.spec_names, job.config_group)
     needs_gt_poses = any(s.depth == "gt" for s in specs)
     ctx = SequenceContext(job.name, sequence.K, frames, job.seed,
                           read_groundtruth(sequence.root) if needs_gt_poses else None)
@@ -571,7 +652,10 @@ def write_rows(path: Path, rows: Sequence[dict[str, Any]]) -> None:
 def read_rows(path: Path) -> list[dict[str, str]]:
     with open(path, newline="") as f:
         reader = csv.DictReader(f)
-        if tuple(reader.fieldnames or ()) != ROW_COLUMNS:
+        columns = tuple(reader.fieldnames or ())
+        if columns == LEGACY_ROW_COLUMNS:
+            return [{c: r.get(c, "") for c in ROW_COLUMNS} for r in reader]
+        if columns != ROW_COLUMNS:
             raise ValueError(f"{path} does not have the oracle fusion columns")
         return list(reader)
 
@@ -663,7 +747,7 @@ def summarize(rows: Iterable[dict[str, str]]) -> list[dict[str, Any]]:
                 "share_improved": float(np.mean([d < 0 for d in diff])),
                 "hole_fraction_median": _median(float(r["hole_fraction"]) for r in by_target.values()),
                 **{f"{c}_median": _median(_value(r[c]) for r in by_target.values())
-                   for c in ("rel_d_covered", "rel_d_covered_interior", "rel_d_covered_edge")},
+                   for c in ("rel_d_covered", "rel_d_covered_interior", "rel_d_covered_edge", *EDGE_COLUMNS)},
             })
     return summary
 

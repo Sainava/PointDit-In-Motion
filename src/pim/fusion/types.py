@@ -84,6 +84,11 @@ class FusionConfig:
     include_self: bool = True
     self_weight: float = 1.0
     keep_layers: bool = False
+    source_edge_mask_px: int | None = None
+    """Width of each source's own depth edge band, removed from its valid mask before warping; None disables."""
+    target_edge_fallback_px: int | None = None
+    """Width of the target's own depth edge band, where the target's own depth replaces the fused one; None
+    disables. Needs include_self."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.window, (int, np.integer)) or self.window < 0:
@@ -106,6 +111,12 @@ class FusionConfig:
             raise ValueError(f"min_support must be an integer >= 1, got {self.min_support!r}")
         if not self.self_weight > 0:
             raise ValueError(f"self_weight must be positive, got {self.self_weight}")
+        for name in ("source_edge_mask_px", "target_edge_fallback_px"):
+            value = getattr(self, name)
+            if value is not None and (not isinstance(value, (int, np.integer)) or value < 0):
+                raise ValueError(f"{name} must be None or a non-negative integer, got {value!r}")
+        if self.target_edge_fallback_px is not None and not self.include_self:
+            raise ValueError("target_edge_fallback_px needs include_self, since the fallback is the target's own depth")
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,8 @@ own GT first. Writes oracle_fusion_<sequence>.csv, oracle_fusion_summary.csv, or
 regression_status.json, and fails if the baseline_self rows or the cache do not reproduce per_frame.csv. The
 baseline_self check runs after every output is written and exits with code 3 on a mismatch; any other failure exits
 with code 1. --preflight scores baseline_self on the first targets of each sequence and writes nothing.
---summarize-only rebuilds the summary and json from existing per-sequence CSVs and reruns the baseline_self check."""
+--summarize-only rebuilds the summary and json from existing per-sequence CSVs and reruns the baseline_self check.
+--config-group edge runs the edge-aware configurations instead of the ladder; give it its own --out."""
 
 from __future__ import annotations
 
@@ -27,11 +28,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from pim.consistency.evaluation import atomic_write, init_worker  # noqa: E402
 from pim.evaluation import set_torch_threads  # noqa: E402
 from pim.fusion.oracle import (  # noqa: E402
-    BASELINE_SELF_TOLERANCE, DIVERSE_STRIDE_MS, PREPARE_RECORD, REGRESSION_TOLERANCE, SCALE, SCORE_THREADS, SEED,
-    STORED_REL_D_TOLERANCE, TARGET_COUNT, TARGET_FIRST, WORST_SHOWN, EvalJob, EvalOutcome, Mismatch, RegressionError,
-    SequenceContext, ViewStore, baseline_self_comparison, cache_failures, check_targets, complete, default_targets,
-    evaluate_sequence, evaluate_target, expected_keys, fusion_csv, load_window, read_baseline, read_rows,
-    regression_positions, resolve_specs, summarize, write_summary,
+    BASELINE_SELF_TOLERANCE, CONFIG_GROUPS, DIVERSE_STRIDE_MS, PREPARE_RECORD, REGRESSION_TOLERANCE, SCALE,
+    SCORE_THREADS, SEED, STORED_REL_D_TOLERANCE, TARGET_COUNT, TARGET_FIRST, WORST_SHOWN, EvalJob, EvalOutcome,
+    Mismatch, RegressionError, SequenceContext, ViewStore, baseline_self_comparison, cache_failures, check_targets,
+    complete, default_targets, evaluate_sequence, evaluate_target, expected_keys, fusion_csv, load_window,
+    read_baseline, read_rows, regression_positions, resolve_specs, summarize, write_summary,
 )
 from pim.paths import FORK_DIR, REPO_ROOT  # noqa: E402
 from pim.runs import available_cpus, git_commit, now  # noqa: E402
@@ -52,6 +53,14 @@ PROTOCOL = {
     "gt_ceiling": "GT depth (valid where GT is valid) fused with the causal_diverse_w4 settings with and without "
                   "the target's own GT layer, and with the rung d settings without it; rel_d_covered is also split "
                   "into interior pixels and pixels inside depth_edge_band of the target GT",
+    "edge_scoring": "rel_d_interior and rel_d_edge are rel_d over GT-valid target pixels outside and inside "
+                    "depth_edge_band of the target GT (default parameters), after the hole fallback",
+    "edge_group": "--config-group edge. Bases causal_diverse_w4, centred_adjacent_w4 and causal_adjacent_w4 with "
+                  "the median aggregator and no front layer (rungb_<base>), with source_edge_mask_px 2 or 5 "
+                  "(each source's own aligned depth edge band removed before warping), target_edge_fallback_px 3 "
+                  "(the target's own aligned depth inside its own edge band after aggregation) or both; GT "
+                  "ceilings causal_adjacent_w1 without the target's own layer, and causal_diverse_w4 median "
+                  "without it with both edge options on GT depth bands",
     "controls": "shuffled_poses gives each source the pose of a different random window frame; pose_noise adds "
                 "per-axis Gaussian noise to source translations (mm) and rotation vectors (deg); both use --seed",
     "regression": f"baseline_self rel_d equals per_frame.csv within {BASELINE_SELF_TOLERANCE:g} (absolute, percent) "
@@ -84,7 +93,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="YAML mapping targets to {sequence: [kept-frame indices]}; default is window positions "
                              f"{TARGET_FIRST} to {TARGET_FIRST + TARGET_COUNT - 1}")
     parser.add_argument("--all-targets", action="store_true", help="use every window frame as a target")
-    parser.add_argument("--configs", nargs="+", help="configuration names; default is all, baseline_self is always run")
+    parser.add_argument("--configs", nargs="+",
+                        help="configuration names of the group; default is all, baseline_self is always run")
+    parser.add_argument("--config-group", choices=CONFIG_GROUPS, default="ladder",
+                        help="configuration registry; ladder is the original grid, edge the edge-aware options")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=1, help="one sequence per worker process")
     parser.add_argument("--threads", type=int, default=1, help="OpenMP threads per worker")
@@ -208,6 +220,16 @@ def row_targets(rows: list[dict[str, str]], name: str) -> list[int]:
     return sorted({int(r["target_index"]) for r in rows if r["sequence"] == name})
 
 
+def check_group(out: Path, group: str) -> None:
+    """Refuse to mix configuration groups in one output folder; a record without a group is the ladder."""
+    path = out / RECORD_JSON
+    if path.is_file():
+        written = json.loads(path.read_text()).get("config_group", "ladder")
+        if written != group:
+            raise ValueError(f"{out} holds --config-group {written} results; give --config-group {group} its own "
+                             "--out")
+
+
 def write_outputs(out: Path, summary: list[dict[str, Any]], record: dict[str, Any]) -> None:
     write_summary(out / SUMMARY_CSV, summary)
     atomic_write(out / RECORD_JSON, lambda f: f.write(json.dumps(record, indent=2) + "\n"))
@@ -244,7 +266,7 @@ def run_preflight(args: argparse.Namespace) -> dict[str, Any]:
     """baseline_self on the first targets of each sequence against per_frame.csv; writes nothing."""
     validate(args)
     _, names = cached_sequences(args, read_prepare_record(args.cache))
-    specs = resolve_specs(["baseline_self"])
+    specs = resolve_specs(["baseline_self"], args.config_group)
     baseline = read_baseline(args.baseline_csv)
     explicit = requested_targets(args)
     set_torch_threads(args.score_threads)
@@ -272,7 +294,8 @@ def run_fusion_eval(args: argparse.Namespace) -> dict[str, Any]:
     start_time, started = now(), time.perf_counter()
     prepared = read_prepare_record(args.cache)
     available, names = cached_sequences(args, prepared)
-    specs = resolve_specs(args.configs)
+    specs = resolve_specs(args.configs, args.config_group)
+    check_group(args.out, args.config_group)
     baseline = read_baseline(args.baseline_csv)
     explicit = requested_targets(args)
     set_torch_threads(args.score_threads)
@@ -294,7 +317,7 @@ def run_fusion_eval(args: argparse.Namespace) -> dict[str, Any]:
         print(f"{name} cache reproduces per_frame.csv rel_d on {args.regression_frames} frames", flush=True)
         jobs.append(EvalJob(name, args.data_root, args.sequences_config, args.cache, args.out, tuple(chosen),
                             tuple(s.name for s in specs), {i: v for (n, i), v in baseline.items() if n == name},
-                            args.seed, args.threads, args.score_threads))
+                            args.seed, args.threads, args.score_threads, args.config_group))
 
     args.out.mkdir(parents=True, exist_ok=True)
     todo = [j for j in jobs if not complete(fusion_csv(args.out, j.name), expected_keys(j.name, j.targets, specs))]
@@ -313,6 +336,7 @@ def run_fusion_eval(args: argparse.Namespace) -> dict[str, Any]:
     regression = baseline_self_report(baseline_self_comparison(rows, baseline))
     record = {
         "scale": SCALE,
+        "config_group": args.config_group,
         "cache": {"dir": str(args.cache), "prepare": prepared},
         "baseline_csv": str(args.baseline_csv),
         "commits": {"project": git_commit(REPO_ROOT), "pointdit": git_commit(FORK_DIR)},
@@ -341,6 +365,7 @@ def summarize_existing(args: argparse.Namespace) -> dict[str, Any]:
     """Rebuild the summary and json from the per-sequence CSVs in --out, then rerun the baseline_self check."""
     if not args.baseline_csv.is_file():
         raise FileNotFoundError(f"baseline per_frame.csv {args.baseline_csv} not found")
+    check_group(args.out, args.config_group)
     names = args.sequences or present_sequences(args.out)
     missing = [n for n in names if not fusion_csv(args.out, n).is_file()]
     if not names or missing:
@@ -350,7 +375,8 @@ def summarize_existing(args: argparse.Namespace) -> dict[str, Any]:
     regression = baseline_self_report(baseline_self_comparison(rows, read_baseline(args.baseline_csv)))
 
     path = args.out / RECORD_JSON
-    record = json.loads(path.read_text()) if path.is_file() else {"scale": SCALE, "protocol": PROTOCOL}
+    record = json.loads(path.read_text()) if path.is_file() else {"scale": SCALE, "config_group": args.config_group,
+                                                                 "protocol": PROTOCOL}
     cache_frames = record.get("regression", {}).get("cache_frames_per_sequence")
     record["regression"] = {**regression, "cache_frames_per_sequence": cache_frames}
     record["summarized"] = {
