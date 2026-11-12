@@ -10,3 +10,20 @@ Findings
 - The median aggregator beats the mean on all four sequences. The front layer is inconsistent across sequences.
 
 Limits. One 100 target region per sequence, autocorrelated targets, oracle scale, GT poses.
+
+
+cat >> report/fusion_oracle_readout.md <<'EOF'
+
+## Edge aware follow up (correction)
+
+Hypothesis. Fusion helps interior pixels and adds noise at depth edges, so masking source edges or falling back to the target's own depth at edges should raise the gain.
+
+Result. Refuted. Every edge variant is worse than the plain median in all four sequences. Interior and edge diagnostics show the gain sits mainly at depth edges on fr3 and fr1_room (edge error -10 to -14 percent, interior -1 to -3 percent), where the model's error is large and view dependent. Interior error is small and shared between frames. On fr1_desk, distant sources worsen the interior by about 6 percent. The earlier statement that fusion adds noise at edges came from reading the GT ceiling rows without comparing them to the model's own edge error, and it was wrong.
+
+Best deployable candidate so far. Causal adjacent window 4 with the median aggregator changes median Rel_d by -2.2, -3.5, -6.9 and -5.5 percent on fr1_desk, fr1_room, fr1_360 and fr3 (oracle scale, 100 targets).
+
+The one frame GT ceiling (0.4 to 0.6 percent interior, 2.2 to 2.7 percent edge) shows the splat is not the limiting factor.
+EOF
+git add report/fusion_oracle_readout.md results/fusion/oracle_eval_edge
+git commit -m "docs - correct edge hypothesis in oracle fusion readout"
+git push origin feat/temporal-fusion
