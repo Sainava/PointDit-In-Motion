@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 
 import numpy as np
 
@@ -17,8 +17,10 @@ BASELINE_SOFTNESS = 0.05
 def fuse_frame(
     frames: Sequence[SourceView], target: TargetSpec, target_time: float, config: FusionConfig,
     self_view: SourceView | None = None,
+    warp: Callable[[SourceView, TargetSpec], WarpedLayer] = warp_to_target,
 ) -> FusionResult:
-    """self_view is the target frame's own depth, required when config.include_self is set."""
+    """self_view is the target frame's own depth, required when config.include_self is set. warp lets a caller
+    reuse layers it already warped into this target."""
     if config.include_self:
         if self_view is None:
             raise ValueError("include_self is set but no self_view was given")
@@ -31,7 +33,7 @@ def fuse_frame(
     weights = np.zeros((n_layers, *shape), dtype=np.float32)
     hits = np.zeros((n_layers, *shape), dtype=bool)
 
-    for k, layer in enumerate(_layers(frames, indices, target, self_view if config.include_self else None)):
+    for k, layer in enumerate(_layers(frames, indices, target, self_view if config.include_self else None, warp)):
         is_self = config.include_self and k == 0
         depths[k], hits[k] = layer.depth, layer.hit
         weights[k] = layer.hit * np.float32(config.self_weight) if is_self else layer_weight(layer, config)
@@ -44,12 +46,13 @@ def fuse_frame(
 
 
 def _layers(
-    frames: Sequence[SourceView], indices: list[int], target: TargetSpec, self_view: SourceView | None
+    frames: Sequence[SourceView], indices: list[int], target: TargetSpec, self_view: SourceView | None,
+    warp: Callable[[SourceView, TargetSpec], WarpedLayer] = warp_to_target,
 ) -> Iterator[WarpedLayer]:
     if self_view is not None:
         yield self_layer(self_view, target.grid_scale)
     for i in indices:
-        yield warp_to_target(frames[i], target)
+        yield warp(frames[i], target)
 
 
 def layer_weight(layer: WarpedLayer, config: FusionConfig) -> np.ndarray:
