@@ -1,0 +1,10 @@
+# Every option at its default, spelled out; must reproduce the cached baseline predictions.
+name: sweep_baseline_check
+inference:
+  init: zeros
+  seed: null
+  steps: 3
+  dtype: bf16
+  target_tokens: 1024
+  model: L
+  input_downscale: 1

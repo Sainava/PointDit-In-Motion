@@ -1,0 +1,5 @@
+name: sweep_fp16
+inference:
+  init: zeros
+  seed: null
+  dtype: fp16
