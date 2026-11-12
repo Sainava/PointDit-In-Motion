@@ -109,6 +109,32 @@ def evaluate_frame(
     )
 
 
+def depth_affine_metrics(
+    pred_depth: np.ndarray, gt_points: np.ndarray, gt_valid: np.ndarray, device: str = "cpu"
+) -> tuple[float, float, np.ndarray]:
+    """(rel_d, delta1_d, aligned depth) from upstream compute_metrics' depth affine branch alone, the branch
+    evaluate_frame reports as rel_d and delta1_d; NaN and an all-NaN map below MIN_VALID_PIXELS."""
+    _check_hw(pred_depth=pred_depth, gt_points=gt_points, gt_valid=gt_valid)
+    mask = gt_valid.astype(bool)
+    if int(mask.sum()) < MIN_VALID_PIXELS:
+        return float("nan"), float("nan"), np.full(mask.shape, np.nan, dtype=np.float32)
+
+    import torch
+
+    compute_metrics = _upstream_compute_metrics()
+    pred = torch.from_numpy(np.ascontiguousarray(pred_depth, dtype=np.float32)).to(device)[None]
+    gt = torch.from_numpy(np.ascontiguousarray(gt_points, dtype=np.float32)).to(device)[None]
+    with torch.no_grad():
+        metrics, aligned = compute_metrics(
+            {"depth_affine_invariant": pred},
+            {"points": gt, "depth": gt[..., 2], "depth_mask": torch.from_numpy(mask).to(device)[None]},
+            vis=True,
+        )
+    depth = metrics["depth_affine_invariant"]
+    return (float(depth["rel"]) * 100.0, float(depth["delta1"]) * 100.0,
+            aligned["pred_depth"][0].float().cpu().numpy())
+
+
 def implied_focal(points: np.ndarray, valid: np.ndarray, cx: float, min_offset_px: float = FOCAL_MIN_OFFSET_PX) -> float:
     """Horizontal focal length, in pixels, of a point map known only up to scale and xyz shift; NaN if unusable."""
     _check_hw(points=points, valid=valid)
