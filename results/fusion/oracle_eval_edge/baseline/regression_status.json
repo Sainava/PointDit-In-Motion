@@ -1,0 +1,44 @@
+{
+  "status": "pass",
+  "frames_over_tolerance": 0,
+  "frames_compared": 400,
+  "tolerance": 0.0001,
+  "max_abs_diff": 1.1175870895385742e-06,
+  "worst": [
+    {
+      "sequence": "rgbd_dataset_freiburg3_long_office_household",
+      "frame_index": 776,
+      "rel_d": 5.887960270047188,
+      "per_frame_rel_d": 5.887959152460098,
+      "abs_diff": 1.1175870895385742e-06
+    },
+    {
+      "sequence": "rgbd_dataset_freiburg1_desk",
+      "frame_index": 315,
+      "rel_d": 6.522222608327866,
+      "per_frame_rel_d": 6.522223353385925,
+      "abs_diff": 7.450580596923828e-07
+    },
+    {
+      "sequence": "rgbd_dataset_freiburg1_desk",
+      "frame_index": 316,
+      "rel_d": 6.952948868274689,
+      "per_frame_rel_d": 6.952948123216629,
+      "abs_diff": 7.450580596923828e-07
+    },
+    {
+      "sequence": "rgbd_dataset_freiburg1_desk",
+      "frame_index": 319,
+      "rel_d": 5.398369207978249,
+      "per_frame_rel_d": 5.398368462920189,
+      "abs_diff": 7.450580596923828e-07
+    },
+    {
+      "sequence": "rgbd_dataset_freiburg1_desk",
+      "frame_index": 323,
+      "rel_d": 7.2072528302669525,
+      "per_frame_rel_d": 7.207253575325012,
+      "abs_diff": 7.450580596923828e-07
+    }
+  ]
+}
