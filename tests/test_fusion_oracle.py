@@ -319,12 +319,70 @@ def test_regression_fails_on_a_perturbed_target_baseline_after_writing_every_out
         fusion_eval.run_fusion_eval(eval_args(setup, out, per_frame, "--configs", "baseline_self"))
 
     assert {p.name for p in out.iterdir()} >= {f"oracle_fusion_{NAME}.csv", "oracle_fusion_summary.csv",
-                                               "oracle_fusion.json"}
+                                               "oracle_fusion.json", "regression_status.json"}
     assert len(read_csv(out / f"oracle_fusion_{NAME}.csv")) == len(TARGETS)
     regression = json.loads((out / "oracle_fusion.json").read_text())["regression"]
     assert not regression["passed"] and regression["frames_over_tolerance"] == 1
     assert regression["worst"][0]["frame_index"] == TARGETS[1]
     assert f"FAIL baseline_self {NAME} frame {TARGETS[1]}" in capsys.readouterr().out
+
+
+def run_main(monkeypatch, argv: list[str]) -> int:
+    monkeypatch.setenv("OMP_NUM_THREADS", "1")
+    monkeypatch.setattr(sys, "argv", ["fusion_eval.py", *argv])
+    with pytest.raises(SystemExit) as exit_info:
+        fusion_eval.main()
+    return exit_info.value.code
+
+
+def main_argv(setup: dict[str, Path], out: Path, per_frame: Path, *extra: str) -> list[str]:
+    return ["--cache", str(setup["cache"]), "--data-root", str(setup["data_root"]),
+            "--sequences-config", str(setup["config"]), "--baseline-csv", str(per_frame),
+            "--targets", str(setup["targets"]), "--out", str(out), *extra]
+
+
+def test_a_baseline_self_mismatch_writes_every_output_and_status_then_exits_3(
+        setup, tmp_path: Path, monkeypatch, capsys) -> None:
+    per_frame = perturbed_per_frame(setup, tmp_path / "per_frame.csv", TARGETS[1])
+    out = tmp_path / "out"
+    assert run_main(monkeypatch, main_argv(setup, out, per_frame, "--configs", "baseline_self")) == 3
+
+    assert " FAILED " in capsys.readouterr().out
+    assert len(read_csv(out / f"oracle_fusion_{NAME}.csv")) == len(TARGETS)
+    assert (out / "oracle_fusion_summary.csv").is_file() and (out / "oracle_fusion.json").is_file()
+    status = json.loads((out / "regression_status.json").read_text())
+    assert status["status"] == "fail" and status["frames_over_tolerance"] == 1
+    assert status["frames_compared"] == len(TARGETS)
+    assert status["max_abs_diff"] == pytest.approx(1e-3, rel=1e-3)
+    assert status["worst"][0]["frame_index"] == TARGETS[1] and len(status["worst"]) == len(TARGETS)
+
+
+def test_a_cache_mismatch_exits_1(setup, tmp_path: Path, monkeypatch) -> None:
+    per_frame = perturbed_per_frame(setup, tmp_path / "per_frame.csv", 0)
+    assert run_main(monkeypatch, main_argv(setup, tmp_path / "out", per_frame)) == 1
+
+
+def test_preflight_passes_and_writes_nothing(setup, tmp_path: Path, capsys) -> None:
+    out = tmp_path / "out"
+    regression = fusion_eval.run_preflight(eval_args(setup, out, None, "--preflight"))
+    assert regression["passed"] and regression["baseline_self_rows"] == min(len(TARGETS), 3)
+    assert not out.exists()
+    assert "preflight passed" in capsys.readouterr().out
+
+
+def test_preflight_fails_on_a_perturbed_baseline_and_exits_1(setup, tmp_path: Path, monkeypatch) -> None:
+    per_frame = perturbed_per_frame(setup, tmp_path / "per_frame.csv", TARGETS[0])
+    out = tmp_path / "out"
+    with pytest.raises(RegressionError, match="preflight FAILED"):
+        fusion_eval.run_preflight(eval_args(setup, out, per_frame, "--preflight"))
+    assert run_main(monkeypatch, main_argv(setup, out, per_frame, "--preflight")) == 1
+    assert not out.exists()
+
+
+def test_preflight_and_summarize_only_exclude_each_other(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        fusion_eval.parse_args(["--preflight", "--summarize-only", "--out", str(tmp_path),
+                                "--baseline-csv", str(tmp_path / "per_frame.csv")])
 
 
 def test_regression_reports_every_mismatch_and_the_worst_first(setup, tmp_path: Path, capsys) -> None:
@@ -417,6 +475,9 @@ def test_summarize_only_rebuilds_summary_and_json_without_cache_or_data(tmp_path
     assert record["regression"]["passed"] and record["regression"]["baseline_self_rows"] == 6
     assert record["summarized"]["sequences"] == ["seq_a", "seq_b"]
     assert record["summarized"]["targets"] == {"seq_a": [3, 4, 5], "seq_b": [3, 4, 5]}
+    status = json.loads((out / "regression_status.json").read_text())
+    assert status["status"] == "pass" and status["frames_over_tolerance"] == 0
+    assert status["max_abs_diff"] == pytest.approx(1.2e-6, rel=1e-3)
 
 
 def test_summarize_only_keeps_an_existing_record_and_fails_after_writing(tmp_path: Path) -> None:
@@ -436,6 +497,16 @@ def test_summarize_only_keeps_an_existing_record_and_fails_after_writing(tmp_pat
         "sequence": "seq_b", "frame_index": 5, "rel_d": None, "per_frame_rel_d": None,
         "abs_diff": pytest.approx(1e-3)}
     assert (out / "oracle_fusion_summary.csv").is_file()
+    assert json.loads((out / "regression_status.json").read_text())["status"] == "fail"
+
+
+def test_summarize_only_exits_3_on_a_mismatch(tmp_path: Path, monkeypatch) -> None:
+    out, baseline = tmp_path / "out", tmp_path / "per_frame.csv"
+    synthetic_output(out, baseline, {("seq_a", 3): 1e-3, ("seq_b", 4): 2e-3})
+    assert run_main(monkeypatch, ["--summarize-only", "--out", str(out), "--baseline-csv", str(baseline)]) == 3
+    status = json.loads((out / "regression_status.json").read_text())
+    assert status["frames_over_tolerance"] == 2
+    assert [(w["sequence"], w["frame_index"]) for w in status["worst"][:2]] == [("seq_b", 4), ("seq_a", 3)]
 
 
 def test_summarize_only_needs_no_cache_but_full_runs_do(tmp_path: Path) -> None:

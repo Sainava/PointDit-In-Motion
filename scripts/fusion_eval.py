@@ -1,8 +1,10 @@
 """ORACLE-SCALE fusion, step 2. Fuse the GT-aligned depth cache of fusion_prepare.py into target frames for every
 configuration and score each fused depth against GT. This is an upper bound, since every source was aligned to its
-own GT first. Writes oracle_fusion_<sequence>.csv, oracle_fusion_summary.csv and oracle_fusion.json, and fails if the
-baseline_self rows or the cache do not reproduce per_frame.csv. The baseline_self check runs after every output is
-written. --summarize-only rebuilds the summary and json from existing per-sequence CSVs and reruns that check."""
+own GT first. Writes oracle_fusion_<sequence>.csv, oracle_fusion_summary.csv, oracle_fusion.json and
+regression_status.json, and fails if the baseline_self rows or the cache do not reproduce per_frame.csv. The
+baseline_self check runs after every output is written and exits with code 3 on a mismatch; any other failure exits
+with code 1. --preflight scores baseline_self on the first targets of each sequence and writes nothing.
+--summarize-only rebuilds the summary and json from existing per-sequence CSVs and reruns the baseline_self check."""
 
 from __future__ import annotations
 
@@ -27,9 +29,9 @@ from pim.evaluation import set_torch_threads  # noqa: E402
 from pim.fusion.oracle import (  # noqa: E402
     BASELINE_SELF_TOLERANCE, DIVERSE_STRIDE_MS, PREPARE_RECORD, REGRESSION_TOLERANCE, SCALE, SCORE_THREADS, SEED,
     STORED_REL_D_TOLERANCE, TARGET_COUNT, TARGET_FIRST, WORST_SHOWN, EvalJob, EvalOutcome, Mismatch, RegressionError,
-    baseline_self_comparison, cache_failures, check_targets, complete, default_targets, evaluate_sequence,
-    expected_keys, fusion_csv, load_window, read_baseline, read_rows, regression_positions, resolve_specs, summarize,
-    write_summary,
+    SequenceContext, ViewStore, baseline_self_comparison, cache_failures, check_targets, complete, default_targets,
+    evaluate_sequence, evaluate_target, expected_keys, fusion_csv, load_window, read_baseline, read_rows,
+    regression_positions, resolve_specs, summarize, write_summary,
 )
 from pim.paths import FORK_DIR, REPO_ROOT  # noqa: E402
 from pim.runs import available_cpus, git_commit, now  # noqa: E402
@@ -59,6 +61,13 @@ PROTOCOL = {
 }
 SUMMARY_CSV = "oracle_fusion_summary.csv"
 RECORD_JSON = "oracle_fusion.json"
+STATUS_JSON = "regression_status.json"
+PREFLIGHT_TARGETS = 3
+EXIT_BASELINE_MISMATCH = 3
+
+
+class BaselineSelfMismatch(RegressionError):
+    """baseline_self differs from per_frame.csv after every output was written."""
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -86,7 +95,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--summarize-only", action="store_true",
                         help="rebuild the summary and json from the oracle_fusion_<sequence>.csv files in --out and "
                              "rerun the baseline_self check; needs no cache, data or predictions")
+    parser.add_argument("--preflight", action="store_true",
+                        help=f"score only baseline_self on the first {PREFLIGHT_TARGETS} targets of each sequence "
+                             "against per_frame.csv and write nothing")
     args = parser.parse_args(argv)
+    if args.preflight and args.summarize_only:
+        parser.error("give --preflight or --summarize-only, not both")
     if not args.summarize_only and (args.cache is None or args.data_root is None):
         parser.error("--cache and --data-root are required unless --summarize-only is given")
     return args
@@ -160,9 +174,19 @@ def baseline_self_report(comparison: list[Mismatch], tolerance: float = BASELINE
             "passed": not over}
 
 
+def write_status(out: Path, regression: dict[str, Any]) -> None:
+    status = {"status": "pass" if regression["passed"] else "fail",
+              "frames_over_tolerance": regression["frames_over_tolerance"],
+              "frames_compared": regression["baseline_self_rows"],
+              "tolerance": regression["baseline_self_tolerance"],
+              "max_abs_diff": regression["max_abs_diff"],
+              "worst": regression["worst"]}
+    atomic_write(out / STATUS_JSON, lambda f: f.write(json.dumps(status, indent=2) + "\n"))
+
+
 def check_baseline_self(regression: dict[str, Any], out: Path) -> None:
     if not regression["passed"]:
-        raise RegressionError(
+        raise BaselineSelfMismatch(
             f"regression check of baseline_self against per_frame.csv FAILED for "
             f"{regression['frames_over_tolerance']} of {regression['baseline_self_rows']} frames (max |diff| "
             f"{regression['max_abs_diff']}, tolerance {regression['baseline_self_tolerance']:g}); every output is "
@@ -187,6 +211,7 @@ def row_targets(rows: list[dict[str, str]], name: str) -> list[int]:
 def write_outputs(out: Path, summary: list[dict[str, Any]], record: dict[str, Any]) -> None:
     write_summary(out / SUMMARY_CSV, summary)
     atomic_write(out / RECORD_JSON, lambda f: f.write(json.dumps(record, indent=2) + "\n"))
+    write_status(out, record["regression"])
 
 
 def fail(title: str, failures: list[str]) -> None:
@@ -206,15 +231,47 @@ def print_table(summary: list[dict[str, Any]]) -> None:
                   f"{e['rel_change_pct_median']:>8.2f} {e['share_improved']:>8.2f} {e['hole_fraction_median']:>6.3f}")
 
 
-def run_fusion_eval(args: argparse.Namespace) -> dict[str, Any]:
-    validate(args)
-    start_time, started = now(), time.perf_counter()
-    prepared = read_prepare_record(args.cache)
+def cached_sequences(args: argparse.Namespace, prepared: dict[str, Any]) -> tuple[list[str], list[str]]:
     available = list(prepared["sequences"])
     names = args.sequences or available
     missing = [n for n in names if n not in available]
     if missing:
         raise ValueError(f"sequences {missing} are not in the cache {args.cache}, which holds {available}")
+    return available, names
+
+
+def run_preflight(args: argparse.Namespace) -> dict[str, Any]:
+    """baseline_self on the first targets of each sequence against per_frame.csv; writes nothing."""
+    validate(args)
+    _, names = cached_sequences(args, read_prepare_record(args.cache))
+    specs = resolve_specs(["baseline_self"])
+    baseline = read_baseline(args.baseline_csv)
+    explicit = requested_targets(args)
+    set_torch_threads(args.score_threads)
+    rows = []
+    for name in names:
+        sequence, frames = load_window(name, args.data_root, args.sequences_config)
+        chosen = (explicit[name] if explicit is not None else default_targets(frames, args.all_targets))[
+            :PREFLIGHT_TARGETS]
+        check_targets(name, frames, chosen)
+        ctx = SequenceContext(name, sequence.K, frames, args.seed)
+        store = ViewStore(args.cache, name, frames)
+        position = {f.index: k for k, f in enumerate(frames)}
+        rows.extend(r for t in chosen for r in evaluate_target(ctx, store, specs, position[t]))
+    regression = baseline_self_report(baseline_self_comparison(rows, baseline))
+    if not regression["passed"]:
+        raise RegressionError(f"preflight FAILED. baseline_self differs from per_frame.csv for "
+                              f"{regression['frames_over_tolerance']} of {regression['baseline_self_rows']} frames "
+                              f"(max |diff| {regression['max_abs_diff']})")
+    print(f"preflight passed. {regression['baseline_self_rows']} baseline_self rows match per_frame.csv")
+    return regression
+
+
+def run_fusion_eval(args: argparse.Namespace) -> dict[str, Any]:
+    validate(args)
+    start_time, started = now(), time.perf_counter()
+    prepared = read_prepare_record(args.cache)
+    available, names = cached_sequences(args, prepared)
     specs = resolve_specs(args.configs)
     baseline = read_baseline(args.baseline_csv)
     explicit = requested_targets(args)
@@ -312,7 +369,16 @@ def main() -> None:
     args = parse_args()
     os.environ["OMP_NUM_THREADS"] = str(args.threads)
     try:
-        summarize_existing(args) if args.summarize_only else run_fusion_eval(args)
+        if args.preflight:
+            run_preflight(args)
+        elif args.summarize_only:
+            summarize_existing(args)
+        else:
+            run_fusion_eval(args)
+    except BaselineSelfMismatch as error:
+        banner = "=" * 30 + " FAILED " + "=" * 30
+        print(f"\n{banner}\n{error}\nsee {args.out / STATUS_JSON}\n{banner}", flush=True)
+        sys.exit(EXIT_BASELINE_MISMATCH)
     except RegressionError as error:
         print(f"\n{error}", file=sys.stderr)
         sys.exit(1)
