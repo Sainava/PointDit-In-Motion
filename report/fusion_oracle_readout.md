@@ -11,9 +11,6 @@ Findings
 
 Limits. One 100 target region per sequence, autocorrelated targets, oracle scale, GT poses.
 
-
-cat >> report/fusion_oracle_readout.md <<'EOF'
-
 ## Edge aware follow up (correction)
 
 Hypothesis. Fusion helps interior pixels and adds noise at depth edges, so masking source edges or falling back to the target's own depth at edges should raise the gain.
@@ -23,7 +20,16 @@ Result. Refuted. Every edge variant is worse than the plain median in all four s
 Best deployable candidate so far. Causal adjacent window 4 with the median aggregator changes median Rel_d by -2.2, -3.5, -6.9 and -5.5 percent on fr1_desk, fr1_room, fr1_360 and fr3 (oracle scale, 100 targets).
 
 The one frame GT ceiling (0.4 to 0.6 percent interior, 2.2 to 2.7 percent edge) shows the splat is not the limiting factor.
-EOF
-git add report/fusion_oracle_readout.md results/fusion/oracle_eval_edge
-git commit -m "docs - correct edge hypothesis in oracle fusion readout"
-git push origin feat/temporal-fusion
+
+
+## Deployable result, joint solved scale (provisional)
+
+Setup. Scale is estimated from the window itself (robust parallax solve, no ground truth). Poses remain the ground truth motion capture poses. Results are median per target changes in Rel_d over 100 targets, scored after the standard per frame alignment of the final depth, so they are compared with baseline_self and not with the oracle rows, which were scored under a different protocol.
+
+Findings
+- Causal adjacent window 4 changes Rel_d by -4.5, -2.3, -5.8 and -3.8 percent on fr1_desk, fr1_room, fr1_360 and fr3, with 64 to 76 percent of targets improved.
+- Controls. Shuffled poses are 42 to 147 percent worse. The no fusion control equals baseline within 1.5e-6.
+- The solver recovers depth only to about 8 to 12 percent and scale correlations with the oracle are low. On fr1_360, 66 of 100 windows are rotation dominated and use the shared fallback fit.
+- Distant sources (diverse windows) help on fr3 and fr1_room but not reliably on fr1.
+
+Limits. Medians, no bootstrap yet, oracle poses, 100 autocorrelated targets per sequence.
