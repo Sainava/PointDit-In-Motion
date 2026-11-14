@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import fcntl
 import json
 import os
@@ -95,6 +96,8 @@ class SequenceStats:
     # Over the frames predicted by this process only; None when every frame was skipped.
     mean_model_latency_ms: float | None = None
     median_model_latency_ms: float | None = None
+    # (frame index, model_latency_ms, latency_ms) for each frame this process predicted, after warm-up.
+    frame_timings: tuple[tuple[int, float, float], ...] = ()
 
 
 def load_run_config(path: Path) -> RunConfig:
@@ -197,6 +200,7 @@ def predict_sequence(
 
     predicted = skipped = 0
     model_latencies: list[float] = []
+    frame_timings: list[tuple[int, float, float]] = []
     for frame in frames:
         path = prediction_path(sequence_dir, frame)
         if path.is_file():
@@ -208,13 +212,26 @@ def predict_sequence(
         result = runner.predict(frame.load_rgb(), init=config.init, seed=seed)
         save_prediction(path, frame, sequence.root, result, seed)
         model_latencies.append(float(result.model_latency_ms))
+        frame_timings.append((frame.index, float(result.model_latency_ms), float(result.latency_ms)))
         predicted += 1
 
     latencies, peaks = read_timings([prediction_path(sequence_dir, f) for f in frames])
     model_mean = float(np.mean(model_latencies)) if model_latencies else None
     model_median = float(np.median(model_latencies)) if model_latencies else None
     return SequenceStats(len(frames), predicted, skipped, float(np.mean(latencies)), float(np.max(peaks)),
-                         model_mean, model_median)
+                         model_mean, model_median, tuple(frame_timings))
+
+
+TIMING_COLUMNS = ("sequence", "frame_index", "model_latency_ms", "latency_ms")
+
+
+def append_timings(path: Path, sequence: str, stats: SequenceStats) -> None:
+    new = not path.is_file() or path.stat().st_size == 0
+    with open(path, "a", newline="") as f:
+        writer = csv.writer(f)
+        if new:
+            writer.writerow(TIMING_COLUMNS)
+        writer.writerows((sequence, index, model_ms, latency_ms) for index, model_ms, latency_ms in stats.frame_timings)
 
 
 def read_timings(paths: list[Path]) -> tuple[list[float], list[float]]:
@@ -371,6 +388,8 @@ def main() -> None:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--subsets", type=Path,
                         help="YAML of inclusive frame ranges per sequence; predict only those frames")
+    parser.add_argument("--timings", type=Path,
+                        help="CSV to append per-frame model_latency_ms and latency_ms of the frames predicted here")
     args = parser.parse_args()
 
     config = load_run_config(args.config)
@@ -400,6 +419,8 @@ def main() -> None:
         stats = predict_sequence(runner, config, sequence, windows[sequence.name], run_dir)
         with run_record(run_dir) as record:
             record_sequence(record, invocation["id"], sequence.name, summaries[sequence.name], stats)
+        if args.timings:
+            append_timings(args.timings, sequence.name, stats)
         model = "" if stats.mean_model_latency_ms is None else f" (model {stats.mean_model_latency_ms:.0f} ms)"
         print(f"{sequence.name}: {stats.frames} frames done ({stats.predicted} predicted, "
               f"{stats.skipped} skipped), mean latency {stats.mean_latency_ms:.0f} ms{model}, "

@@ -71,6 +71,8 @@ def main() -> None:
     parser.add_argument("--subsets", type=Path, required=True, help="frames to compare")
     parser.add_argument("--tolerance", type=float, default=DETERMINISM_TOLERANCE)
     parser.add_argument("--out", type=Path, required=True, help="determinism.csv")
+    parser.add_argument("--mismatch-exit-code", type=int, default=1,
+                        help="exit code when a frame fails; errors that stop the check still exit 1")
     args = parser.parse_args()
 
     rows = compare(args.predictions, args.reference, load_subsets(args.subsets), args.tolerance)
@@ -82,7 +84,7 @@ def main() -> None:
     passed = report(rows, args.tolerance)
     print(f"wrote {args.out}")
     if not passed:
-        sys.exit(1)
+        sys.exit(args.mismatch_exit_code)
 
 
 if __name__ == "__main__":
