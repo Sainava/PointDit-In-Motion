@@ -33,3 +33,14 @@ Findings
 - Distant sources (diverse windows) help on fr3 and fr1_room but not reliably on fr1.
 
 Limits. Medians, no bootstrap yet, oracle poses, 100 autocorrelated targets per sequence.
+
+
+## Bootstrap analysis (supersedes the provisional medians above)
+
+Method. Per target percent change in rel_d against baseline_self, mean and median, moving block bootstrap over targets (2000 resamples, blocks 8, 15 and 30). A claim is robust only when all three intervals exclude zero. Results are in results/fusion_analysis/.
+
+Deployable result (joint solved scale, causal adjacent window 4, ground truth poses). Pooled mean change -4.3 percent [-6.6, -2.1], robust. Per sequence mean change fr1_room -4.5 (robust), fr1_360 -5.9 (robust), fr3 -4.3 (robust), fr1_desk -2.4 (not robust, interval -7.7 to 4.2).
+
+Measured versus forecast. Short adjacent windows match the forecast on fr3, fr1_room and fr1_360. Longer and more distant windows fall short, and on fr1_desk and fr1_360 the diverse windows give no gain or a loss in point estimate. The forecast assumed warp error stays small. It does not on fr1_desk, which has the largest warp error and fastest motion.
+
+Corrections. The earlier remark that joint solved beat the oracle on fr1_desk is not meaningful, since neither effect is robust there. The earlier claim that distant sources reach 30 to 55 percent of the forecast holds only for fr3 and fr1_room.
