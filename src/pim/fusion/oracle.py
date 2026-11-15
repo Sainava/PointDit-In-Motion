@@ -191,6 +191,19 @@ def cache_path(cache_dir: Path, sequence: str, frame_index: int) -> Path:
     return cache_dir / sequence / f"{frame_index:05d}.npz"
 
 
+def resolve_cache_dir(path: Path, run_name: str) -> Path:
+    """The prepared cache of run_name given the cache folder itself, its oracle_aligned parent or a notebook output
+    root holding fusion/oracle_aligned. The cache folder is recognised by its own prepare record first."""
+    path = Path(path)
+    if (path / PREPARE_RECORD).is_file():
+        return path
+    root = path if path.name == "oracle_aligned" else path / "fusion" / "oracle_aligned"
+    cache = root / run_name
+    if not (cache / PREPARE_RECORD).is_file():
+        raise FileNotFoundError(f"no {PREPARE_RECORD} in {path} or in {cache}")
+    return cache
+
+
 @dataclass(frozen=True)
 class CachedAlignment:
     frame_index: int
