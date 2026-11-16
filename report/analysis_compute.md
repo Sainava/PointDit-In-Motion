@@ -71,3 +71,22 @@ Computed for all 1,200 window frames (`results/covariates/covariates.csv`): came
 **Summary.** PointDiT's per-frame error on TUM is driven mainly by scene content (depth edges, depth range) and secondarily by image sharpness, which has an effect independent of GT timing. Camera speed matters only through sharpness. A small number of frames show non-motion-driven instability in far geometry, which motivates the temporal-consistency analysis.
 
 **Limitations.** One 300-frame window per sequence; strongly autocorrelated frames; correlational analysis only; Kinect GT has noise and holes at edges; fr1 intrinsics are approximate.
+
+
+## Compute sweep (single T4, one process, 200 frames from fr1_360 and fr3)
+
+Latency is model.generate only. The GPU clock fell from 1590 MHz to 585 MHz during the first config and stayed there, so latencies are relative to each other under a sustained throttled clock. Accuracy is the median per frame Rel_d difference against the bf16 baseline, with a block bootstrap interval (block 15).
+
+| Config | Latency ms | Rel_d diff [95% CI] |
+|---|---|---|
+| baseline bf16, 3 steps | 1593 | 0 |
+| fp16 | 341 | +0.007 [0.004, 0.015] |
+| steps 1 | 797 | +0.107 [0.081, 0.123] |
+| steps 2 | 1201 | +0.020 [0.003, 0.036] |
+| steps 4 | 2008 | +0.004 [-0.006, 0.016] |
+| tokens 512 | 744 | +0.254 [0.144, 0.437] |
+| tokens 2048 | 3715 | +0.216 [0.092, 0.286] |
+| model B | 495 | +0.796 [0.520, 1.007] |
+| input downscale 2 | 1601 | -0.017 [-0.056, 0.014] |
+
+Findings. fp16 is 4.7 times faster than bf16 on the T4 at a negligible accuracy cost. Extra steps and tokens do not help. Model B is clearly less accurate. Limits are two sequences, autocorrelated frames and a single block length.
