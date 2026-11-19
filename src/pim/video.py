@@ -89,6 +89,16 @@ def write_gif(path: Path, frames: list[np.ndarray], fps: float) -> Path:
     return path
 
 
+def hold_repeats(count: int, fps: float, hold_seconds: float) -> list[int]:
+    """How often to write each of count frames so the first and last stay on screen hold_seconds longer."""
+    extra = max(0, round(hold_seconds * fps))
+    repeats = [1] * count
+    if count:
+        repeats[0] += extra
+        repeats[-1] += extra
+    return repeats
+
+
 def half_size(frame: np.ndarray) -> np.ndarray:
     height, width = frame.shape[:2]
     return np.asarray(Image.fromarray(frame).resize((width // 2, height // 2), Image.Resampling.BILINEAR))

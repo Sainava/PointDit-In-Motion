@@ -2,8 +2,9 @@
 ORACLE GT poses, by numpy point splatting with a z-buffer on the CPU.
 
 The camera circles the map centre at an elevation, looking at the centre, for --seconds at --fps into an mp4 and a
-half size gif. --flythrough instead renders the fused map alone from the recorded camera path, then one second beyond
-it with a growing sideways offset."""
+half size gif, the first and last frame held for --hold-seconds. --side-by-side draws the three maps under large
+labels with a one line header instead of the default layout. --flythrough instead renders the fused map alone from
+the recorded camera path, then one second beyond it with a growing sideways offset."""
 
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from export_fused_map import MAP_JSON, read_ply  # noqa: E402
 
-from pim.video import VideoWriter, font, half_size, write_gif  # noqa: E402
+from pim.video import VideoWriter, font, half_size, hold_repeats, write_gif  # noqa: E402
 
 SIZE = (1920, 1080)
 HEADER_PX = 110
@@ -34,6 +35,12 @@ MAX_SPLAT_PX = 4
 GIF_FPS = 10.0
 FLY_EXTRA_S = 1.0
 LATERAL_OFFSET_M = 0.2
+DEFAULT_FPS = 10.0
+SIDE_HEADER_PX = 70
+SIDE_LABEL_PX = 100
+SIDE_FOOTER_PX = 60
+SIDE_COLOURS = {"raw": (242, 142, 43), "fused": (78, 159, 229), "gt": (235, 235, 235)}
+DIVIDER = (90, 90, 90)
 
 
 def look_at(eye: np.ndarray, target: np.ndarray, up: np.ndarray) -> np.ndarray:
@@ -54,17 +61,20 @@ def intrinsics(width: int, height: int, fov_deg: float = FOV_DEG) -> np.ndarray:
 
 
 def splat(points: np.ndarray, colors: np.ndarray, T_world_cam: np.ndarray, K: np.ndarray, size: tuple[int, int],
-          point_size_m: float = POINT_SIZE_M, max_px: int = MAX_SPLAT_PX) -> np.ndarray:
-    """HxWx3 uint8 image of the points as squares of about point_size_m, nearest point winning each pixel."""
+          point_size_m: float | np.ndarray = POINT_SIZE_M, max_px: int = MAX_SPLAT_PX,
+          background: tuple[int, int, int] = BACKGROUND) -> np.ndarray:
+    """HxWx3 uint8 image of the points as squares of about point_size_m (one value or one per point), nearest point
+    winning each pixel."""
     width, height = size
     R, t = T_world_cam[:3, :3], T_world_cam[:3, 3]
     p = (points.astype(np.float64) - t) @ R
     front = p[:, 2] > NEAR_M
     p, index = p[front], np.flatnonzero(front)
+    size_m = np.broadcast_to(np.asarray(point_size_m, dtype=np.float64), (len(points),))[front]
     z = p[:, 2]
     u = K[0, 0] * p[:, 0] / z + K[0, 2]
     v = K[1, 1] * p[:, 1] / z + K[1, 2]
-    side = np.clip(np.ceil(K[0, 0] * point_size_m / z), 1, max_px).astype(np.int64)
+    side = np.clip(np.ceil(K[0, 0] * size_m / z), 1, max_px).astype(np.int64)
     pixel_parts, z_parts, index_parts = [], [], []
     for s in np.unique(side):
         pick = side == s
@@ -77,7 +87,7 @@ def splat(points: np.ndarray, colors: np.ndarray, T_world_cam: np.ndarray, K: np
         z_parts.append(np.repeat(z[pick], s * s)[inside])
         index_parts.append(np.repeat(index[pick], s * s)[inside])
     image = np.empty((height * width, 3), dtype=np.uint8)
-    image[:] = BACKGROUND
+    image[:] = background
     if pixel_parts:
         pixel, depth, source = (np.concatenate(a) for a in (pixel_parts, z_parts, index_parts))
         order = np.lexsort((depth, pixel))
@@ -145,30 +155,68 @@ def header(record: dict, title: str) -> list[tuple[tuple[int, int], str, int, tu
              (255, 209, 102))]
 
 
+def draw_centred(image: np.ndarray, items: list[tuple[tuple[int, int], str, int, tuple[int, int, int]]]) -> np.ndarray:
+    canvas = Image.fromarray(image)
+    draw = ImageDraw.Draw(canvas)
+    for xy, text, size, colour in items:
+        draw.text(xy, text, font=font(size), fill=colour, anchor="mm")
+    return np.asarray(canvas)
+
+
+def side_by_side_frame(record: dict, clouds: dict[str, tuple[np.ndarray, np.ndarray]], T: np.ndarray, K: np.ndarray,
+                       panel: tuple[int, int], point_size: float) -> np.ndarray:
+    top = SIDE_HEADER_PX + SIDE_LABEL_PX
+    frame = np.empty((SIZE[1], SIZE[0], 3), dtype=np.uint8)
+    frame[:] = BACKGROUND
+    centred = []
+    for p, (source, label) in enumerate(PANELS):
+        x0 = p * panel[0]
+        frame[top:top + panel[1], x0:x0 + panel[0]] = splat(*clouds[source], T, K, panel, point_size)
+        centred += [((x0 + panel[0] // 2, SIDE_HEADER_PX + SIDE_LABEL_PX // 2), label, 64, SIDE_COLOURS[source]),
+                    ((x0 + panel[0] // 2, SIZE[1] - SIDE_FOOTER_PX // 2), ghost_text(record, source), 26,
+                     (220, 220, 220))]
+        if p:
+            frame[SIDE_HEADER_PX:, x0 - 2:x0 + 2] = DIVIDER
+    frame = draw_centred(frame, centred)
+    name = record["sequence"].replace("rgbd_dataset_freiburg", "fr")
+    return draw_text(frame, [((16, 18), f"{name}   point maps of raw, fused and GT depth   oracle GT poses, an upper "
+                                         f"bound, joint solved scale", 30, (255, 255, 255))])
+
+
 def render_orbit(record: dict, clouds: dict[str, tuple[np.ndarray, np.ndarray]], args: argparse.Namespace) -> None:
-    panel = (SIZE[0] // len(PANELS), SIZE[1] - HEADER_PX)
+    top, bottom = (SIDE_HEADER_PX + SIDE_LABEL_PX, SIDE_FOOTER_PX) if args.side_by_side else (HEADER_PX, 0)
+    panel = (SIZE[0] // len(PANELS), SIZE[1] - top - bottom)
     K = intrinsics(*panel, args.fov)
     frames = round(args.seconds * args.fps)
     poses = orbit_poses(record["orbit"], frames, args.arc, args.elevation, args.distance_scale, args.fov)
-    video = VideoWriter(args.out_dir / "orbit.mp4", SIZE, args.fps)
+    stem = "orbit_side_by_side" if args.side_by_side else "orbit"
+    video = VideoWriter(args.out_dir / f"{stem}.mp4", SIZE, args.fps)
     gif_step = max(1, round(args.fps / GIF_FPS))
     gif_frames = []
+    written = 0
     title = f"{args.arc:g} degree orbit of the point maps, fused frames at stride {record['settings']['stride']}"
-    for k, T in enumerate(poses):
-        frame = np.empty((SIZE[1], SIZE[0], 3), dtype=np.uint8)
-        frame[:] = BACKGROUND
-        labels = header(record, title)
-        for p, (source, label) in enumerate(PANELS):
-            x0 = p * panel[0]
-            frame[HEADER_PX:, x0:x0 + panel[0]] = splat(*clouds[source], T, K, panel, args.point_size)
-            labels += [((x0 + 16, HEADER_PX + 10), label, 34, (255, 255, 255)),
-                       ((x0 + 16, SIZE[1] - 40), ghost_text(record, source), 22, (220, 220, 220))]
-        frame = draw_text(frame, labels)
-        video.write(frame)
-        if k % gif_step == 0:
-            gif_frames.append(half_size(frame))
+    for T, repeat in zip(poses, hold_repeats(len(poses), args.fps, args.hold_seconds)):
+        if args.side_by_side:
+            frame = side_by_side_frame(record, clouds, T, K, panel, args.point_size)
+        else:
+            frame = np.empty((SIZE[1], SIZE[0], 3), dtype=np.uint8)
+            frame[:] = BACKGROUND
+            labels = header(record, title)
+            for p, (source, label) in enumerate(PANELS):
+                x0 = p * panel[0]
+                frame[HEADER_PX:, x0:x0 + panel[0]] = splat(*clouds[source], T, K, panel, args.point_size)
+                labels += [((x0 + 16, HEADER_PX + 10), label, 34, (255, 255, 255)),
+                           ((x0 + 16, SIZE[1] - 40), ghost_text(record, source), 22, (220, 220, 220))]
+            frame = draw_text(frame, labels)
+        half = None
+        for _ in range(repeat):
+            video.write(frame)
+            if written % gif_step == 0:
+                half = half_size(frame) if half is None else half
+                gif_frames.append(half)
+            written += 1
     video_path = video.close()
-    gif_path = write_gif(args.out_dir / "orbit.gif", gif_frames, args.fps / gif_step)
+    gif_path = write_gif(args.out_dir / f"{stem}.gif", gif_frames, args.fps / gif_step)
     print(f"wrote {video_path} and {gif_path}")
 
 
@@ -182,14 +230,15 @@ def render_flythrough(record: dict, clouds: dict[str, tuple[np.ndarray, np.ndarr
     path = [np.array(T, dtype=np.float64) for T in camera["path_T_world_cam"]]
     poses, recorded = flythrough_poses(path, args.fps, FLY_EXTRA_S, args.lateral)
     video = VideoWriter(args.out_dir / "flythrough.mp4", SIZE, args.fps)
-    for k, T in enumerate(poses):
+    for k, (T, repeat) in enumerate(zip(poses, hold_repeats(len(poses), args.fps, args.hold_seconds))):
         frame = splat(*clouds["fused"], T, K, SIZE, args.point_size)
         where = ("recorded camera path" if k < recorded
                  else f"beyond the recorded path, sideways offset up to {args.lateral:.2f} m")
         frame = draw_text(frame, [*header(record, "fused map flythrough"),
                                   ((16, SIZE[1] - 50), f"fused   {where}   {ghost_text(record, 'fused')}", 28,
                                    (255, 255, 255))])
-        video.write(frame)
+        for _ in range(repeat):
+            video.write(frame)
     print(f"wrote {video.close()}")
 
 
@@ -197,8 +246,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("map_dir", type=Path, help=f"output folder of export_fused_map.py holding {MAP_JSON}")
     parser.add_argument("out_dir", type=Path)
-    parser.add_argument("--fps", type=float, default=30.0)
-    parser.add_argument("--seconds", type=float, default=12.0)
+    parser.add_argument("--fps", type=float, default=DEFAULT_FPS)
+    parser.add_argument("--seconds", type=float, default=12.0, help="orbit length before the holds")
+    parser.add_argument("--hold-seconds", type=float, default=0.0, help="extra time on the first and last frame")
+    parser.add_argument("--side-by-side", action="store_true",
+                        help="raw, fused and GT under large labels with a one line header")
     parser.add_argument("--arc", type=float, default=360.0, help="orbit arc in degrees")
     parser.add_argument("--elevation", type=float, default=35.0, help="orbit elevation in degrees")
     parser.add_argument("--distance-scale", type=float, default=1.0)
