@@ -13,6 +13,10 @@ import yaml
 
 from pim.data.tum import Frame
 
+IGNORED_INPUT_PARTS = ("/Pointdit-In-Motion/",)
+"""Paths containing any of these are never discovered, so a project checkout bundled into an attached output cannot
+stand in for a run's own files."""
+
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -62,3 +66,15 @@ def check_window(name: str, run: dict[str, Any], frames: list[Frame], sequences_
 
 def available_cpus() -> int:
     return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+
+
+def find_input_files(root: Path, name: str, ignored: tuple[str, ...] = IGNORED_INPUT_PARTS) -> list[Path]:
+    """Every file called name under root, following symlinked folders and skipping any path that contains one of
+    ignored."""
+    found = []
+    for folder, dirs, files in os.walk(root, followlinks=True):
+        dirs[:] = [d for d in dirs if not any(part in f"{folder}/{d}/" for part in ignored)]
+        path = Path(folder) / name
+        if name in files and not any(part in str(path) for part in ignored):
+            found.append(path)
+    return sorted(found)

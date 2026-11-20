@@ -1,0 +1,94 @@
+{
+  "status": "pass",
+  "scale": "joint_solved",
+  "poses": "oracle_gt",
+  "baseline_self": {
+    "rows": 400,
+    "tolerance": 0.0001,
+    "over_tolerance": 0,
+    "max_abs_diff": 1.1175870895385742e-06,
+    "worst": [
+      {
+        "sequence": "rgbd_dataset_freiburg3_long_office_household",
+        "frame_index": 776,
+        "rel_d": 5.887960270047188,
+        "expected": 5.887959152460098,
+        "abs_diff": 1.1175870895385742e-06
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_desk",
+        "frame_index": 315,
+        "rel_d": 6.522222608327866,
+        "expected": 6.522223353385925,
+        "abs_diff": 7.450580596923828e-07
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_desk",
+        "frame_index": 316,
+        "rel_d": 6.952948868274689,
+        "expected": 6.952948123216629,
+        "abs_diff": 7.450580596923828e-07
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_desk",
+        "frame_index": 319,
+        "rel_d": 5.398369207978249,
+        "expected": 5.398368462920189,
+        "abs_diff": 7.450580596923828e-07
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_desk",
+        "frame_index": 323,
+        "rel_d": 7.2072528302669525,
+        "expected": 7.207253575325012,
+        "abs_diff": 7.450580596923828e-07
+      }
+    ],
+    "passed": true
+  },
+  "nofusion": {
+    "rows": 400,
+    "tolerance": 0.0001,
+    "over_tolerance": 0,
+    "max_abs_diff": 1.4901161193847656e-06,
+    "worst": [
+      {
+        "sequence": "rgbd_dataset_freiburg1_desk",
+        "frame_index": 313,
+        "rel_d": 2.821255661547184,
+        "expected": 2.8212541714310646,
+        "abs_diff": 1.4901161193847656e-06
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_room",
+        "frame_index": 539,
+        "rel_d": 8.867795765399933,
+        "expected": 8.867794275283813,
+        "abs_diff": 1.4901161193847656e-06
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_room",
+        "frame_index": 540,
+        "rel_d": 8.436869084835052,
+        "expected": 8.436867594718933,
+        "abs_diff": 1.4901161193847656e-06
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_room",
+        "frame_index": 553,
+        "rel_d": 7.6239921152591705,
+        "expected": 7.623990625143051,
+        "abs_diff": 1.4901161193847656e-06
+      },
+      {
+        "sequence": "rgbd_dataset_freiburg1_360",
+        "frame_index": 126,
+        "rel_d": 7.5371041893959045,
+        "expected": 7.537105679512024,
+        "abs_diff": 1.4901161193847656e-06
+      }
+    ],
+    "passed": true
+  },
+  "shuffled_control_passed": true
+}

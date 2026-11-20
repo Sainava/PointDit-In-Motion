@@ -1,0 +1,5 @@
+sequence,config,targets,mean_abs_diff,ci_low,ci_high,max_abs_diff
+fr1_desk,nofusion_joint_causal_adjacent_w4,100,-1.86265e-09,-1.17347e-07,5.02914e-08,1.49012e-06
+fr1_room,nofusion_joint_causal_adjacent_w4,100,5.02914e-08,-1.67638e-08,1.32294e-07,1.49012e-06
+fr1_360,nofusion_joint_causal_adjacent_w4,100,-2.93367e-08,-1.20618e-07,2.6077e-08,1.49012e-06
+fr3,nofusion_joint_causal_adjacent_w4,100,5.58794e-08,0,1.00583e-07,1.11759e-06

@@ -89,3 +89,10 @@ Dataset score = plain mean of per-image values, ×100 (`engine.py:790-796`, `:14
 - Upstream's exact L1 alignment compares every subsampled pixel with every other: at 4,096 pixels a single point-alignment fit builds 4,096 × 4,096 × 3 arrays (~3.5 GB peak per M1 frame, ~1 GB per M2 fit). This caused two kernel panics (watchdog timeouts from memory thrashing) on the 8 GB development Mac. The code asserts that no fit receives more than 4,096 pixels; full consistency runs happen on Kaggle, and local runs are limited to tests and small samples, single process, 2 threads.
 
 - gt_floor_rgb (GT floor with RGB-timestamp poses) is scored on the same visible pixels as all other metrics (visibility from depth-timestamp poses), so the two GT floors are compared pixel for pixel. It therefore differs slightly from a sweep run entirely with RGB-timestamp poses.
+
+
+- Fusion results are labelled by scale source. Oracle rows align every frame to its own ground truth before fusion and are an upper bound. Joint solved rows estimate scale from the window and are scored after the standard per frame alignment of the final depth. Compare joint solved rows with baseline_self, never with oracle rows, because the two are scored under different protocols.
+- All fusion runs use ground truth motion capture poses, so every fusion gain is an upper bound on what a system with estimated poses would reach. Pose noise of about 10 mm or 0.5 degrees removes the gain on fr3.
+- Fusion tables report medians of per target changes over 100 autocorrelated targets per sequence. Formal intervals come from the block bootstrap analysis.
+- The edge aware hypothesis was refuted. Masking source edges or falling back to the target at edges made every sequence worse than the plain median.
+- The joint solver recovers depth only to about 8 to 12 percent and its scale correlation with the oracle is low. On fr1_360, 66 of 100 windows are rotation dominated and use a shared fallback fit.
