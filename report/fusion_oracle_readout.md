@@ -44,3 +44,7 @@ Deployable result (joint solved scale, causal adjacent window 4, ground truth po
 Measured versus forecast. Short adjacent windows match the forecast on fr3, fr1_room and fr1_360. Longer and more distant windows fall short, and on fr1_desk and fr1_360 the diverse windows give no gain or a loss in point estimate. The forecast assumed warp error stays small. It does not on fr1_desk, which has the largest warp error and fastest motion.
 
 Corrections. The earlier remark that joint solved beat the oracle on fr1_desk is not meaningful, since neither effect is robust there. The earlier claim that distant sources reach 30 to 55 percent of the forecast holds only for fr3 and fr1_room.
+
+## Per frame share (full 300 frame windows, oracle poses, joint solved scale)
+
+Fusion lowers rel_d on 74.0 percent of frames on fr1_360 and 59.5 percent on fr1_desk (median change -5.6 and -2.4 percent). Mean change is -4.05 [-7.57, +0.21] and -2.23 [-4.86, +0.09] percent, so over the full window the mean effect is small and not robust on either sequence. The 10th and 90th percentile changes are -21 and +12 percent on fr1_360 and -17 and +13 percent on fr1_desk. The longest run of consecutive worse frames is 9 on both sequences. Frame 23 on fr1_360, which showed higher disagreement in the flicker overlay, has a lower rel_d under fusion (rank 222 of 296 from worst).
