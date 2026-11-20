@@ -1,0 +1,5 @@
+name: sweep_steps_2
+inference:
+  init: zeros
+  seed: null
+  steps: 2

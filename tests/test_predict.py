@@ -29,6 +29,7 @@ class StubResult:
     valid_mask: np.ndarray
     latency_ms: float
     peak_memory_gb: float
+    model_latency_ms: float = 50.0
 
 
 class StubRunner:
@@ -157,8 +158,8 @@ def test_non_finite_points_are_rejected(tmp_path: Path) -> None:
 
 def test_run_config_rejects_unknown_and_missing_keys(tmp_path: Path) -> None:
     path = tmp_path / "run.yaml"
-    path.write_text("name: a\ninference: {init: zeros, seed: null, steps: 3}\n")
-    with pytest.raises(ValueError, match="unknown keys \\['steps'\\]"):
+    path.write_text("name: a\ninference: {init: zeros, seed: null, sampler: euler}\n")
+    with pytest.raises(ValueError, match="unknown keys \\['sampler'\\]"):
         predict.load_run_config(path)
     path.write_text("name: a\ninference: {init: zeros}\n")
     with pytest.raises(ValueError, match="missing keys \\['seed'\\]"):

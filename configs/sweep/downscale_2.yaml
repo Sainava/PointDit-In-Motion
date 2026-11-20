@@ -1,0 +1,5 @@
+name: sweep_downscale_2
+inference:
+  init: zeros
+  seed: null
+  input_downscale: 2

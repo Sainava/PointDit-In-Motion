@@ -1,0 +1,36 @@
+{
+  "config": "steps_2",
+  "run_name": "sweep_steps_2",
+  "status": "ok",
+  "returncode": 0,
+  "seconds": 322.3,
+  "frames_predicted": 200,
+  "frames_expected": 200,
+  "frames_on_disk": 200,
+  "mean_model_latency_ms": 1200.9141010350027,
+  "median_model_latency_ms": 1201.2886020000906,
+  "mean_latency_ms": 1203.2276597850023,
+  "median_latency_ms": 1203.6311800000021,
+  "peak_mem_gb": 3.9928512573242188,
+  "options": {
+    "steps": 2,
+    "dtype": "bf16",
+    "target_tokens": 1024,
+    "model": "L",
+    "input_downscale": 1
+  },
+  "gpu_before": {
+    "sm_clock_mhz": 585.0,
+    "mem_clock_mhz": 5000.0,
+    "temperature_c": 74.0,
+    "power_w": 34.22
+  },
+  "gpu_after": {
+    "sm_clock_mhz": 585.0,
+    "mem_clock_mhz": 5000.0,
+    "temperature_c": 74.0,
+    "power_w": 34.71
+  },
+  "error": null,
+  "output_tail": []
+}

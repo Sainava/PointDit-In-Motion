@@ -1,0 +1,5 @@
+name: sweep_steps_4
+inference:
+  init: zeros
+  seed: null
+  steps: 4

@@ -1,0 +1,5 @@
+name: sweep_model_b
+inference:
+  init: zeros
+  seed: null
+  model: B

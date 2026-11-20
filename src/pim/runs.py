@@ -32,6 +32,16 @@ def git_commit(repo: Path) -> dict[str, Any]:
     return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}
 
 
+# Compute options every run used before predict.py recorded them. A run.json without an `options`
+# entry was predicted with exactly these, so it reads back as them.
+PRE_SWEEP_OPTIONS: dict[str, Any] = {"steps": 3, "dtype": "bf16", "target_tokens": 1024, "model": "L",
+                                     "input_downscale": 1}
+
+
+def run_options(run: dict[str, Any]) -> dict[str, Any]:
+    return dict(run.get("options") or PRE_SWEEP_OPTIONS)
+
+
 def read_run(run_dir: Path) -> dict[str, Any]:
     path = run_dir / "run.json"
     if not path.is_file():

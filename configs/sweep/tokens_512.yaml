@@ -1,0 +1,5 @@
+name: sweep_tokens_512
+inference:
+  init: zeros
+  seed: null
+  target_tokens: 512

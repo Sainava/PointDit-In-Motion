@@ -1,0 +1,36 @@
+{
+  "config": "fp16",
+  "run_name": "sweep_fp16",
+  "status": "ok",
+  "returncode": 0,
+  "seconds": 134.0,
+  "frames_predicted": 200,
+  "frames_expected": 200,
+  "frames_on_disk": 200,
+  "mean_model_latency_ms": 341.1006284299822,
+  "median_model_latency_ms": 340.7217834999301,
+  "mean_latency_ms": 343.34511633000943,
+  "median_latency_ms": 342.9397845002313,
+  "peak_mem_gb": 3.845430850982666,
+  "options": {
+    "steps": 3,
+    "dtype": "fp16",
+    "target_tokens": 1024,
+    "model": "L",
+    "input_downscale": 1
+  },
+  "gpu_before": {
+    "sm_clock_mhz": 585.0,
+    "mem_clock_mhz": 5000.0,
+    "temperature_c": 74.0,
+    "power_w": 34.12
+  },
+  "gpu_after": {
+    "sm_clock_mhz": 585.0,
+    "mem_clock_mhz": 5000.0,
+    "temperature_c": 72.0,
+    "power_w": 31.87
+  },
+  "error": null,
+  "output_tail": []
+}

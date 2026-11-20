@@ -1,0 +1,97 @@
+{
+  "name": "sweep_tokens_2048",
+  "config": {
+    "name": "sweep_tokens_2048",
+    "inference": {
+      "init": "zeros",
+      "seed": null,
+      "target_tokens": 2048
+    }
+  },
+  "options": {
+    "steps": 3,
+    "dtype": "bf16",
+    "target_tokens": 2048,
+    "model": "L",
+    "input_downscale": 1
+  },
+  "start_time": "2026-11-14T11:30:43+00:00",
+  "end_time": "2026-11-14T11:44:31+00:00",
+  "frames_predicted": 200,
+  "frames_skipped": 0,
+  "sequences": {
+    "rgbd_dataset_freiburg1_360": {
+      "window": {
+        "start": 0,
+        "count": 300
+      },
+      "frames": 100,
+      "mean_latency_ms": 3717.723187610027,
+      "peak_mem_gb": 4.464693546295166,
+      "invocation": "5475bbd9",
+      "end_time": "2026-11-14T11:37:56+00:00"
+    },
+    "rgbd_dataset_freiburg3_long_office_household": {
+      "window": {
+        "start": 637,
+        "count": 300
+      },
+      "frames": 100,
+      "mean_latency_ms": 3716.9058462099697,
+      "peak_mem_gb": 4.464693546295166,
+      "invocation": "5475bbd9",
+      "end_time": "2026-11-14T11:44:31+00:00"
+    }
+  },
+  "invocations": [
+    {
+      "id": "5475bbd9",
+      "host": "fbb42a3b8c1c",
+      "device": "cuda:0",
+      "cuda_visible_devices": "0",
+      "gpu": "Tesla T4",
+      "torch": "2.11.0+cu130",
+      "cuda": "13.0",
+      "commits": {
+        "project": {
+          "commit": "a7eb7cbab15eabddb85c64ac447037fc4fa38e9e",
+          "dirty": false
+        },
+        "pointdit": {
+          "commit": "664736a07b665f894990b41fa1788a259136e3cb",
+          "dirty": false
+        },
+        "dinov3": {
+          "commit": "6876159a11b4df116f30f667f8c9888617df0751",
+          "dirty": false
+        }
+      },
+      "start_time": "2026-11-14T11:30:43+00:00",
+      "end_time": "2026-11-14T11:44:31+00:00",
+      "sequences": {
+        "rgbd_dataset_freiburg1_360": {
+          "predicted": 100,
+          "skipped": 0,
+          "mean_model_latency_ms": 3715.298257270006,
+          "median_model_latency_ms": 3712.65457100003
+        },
+        "rgbd_dataset_freiburg3_long_office_household": {
+          "predicted": 100,
+          "skipped": 0,
+          "mean_model_latency_ms": 3714.4381438700016,
+          "median_model_latency_ms": 3714.347903000089
+        }
+      }
+    }
+  ],
+  "subsets": {
+    "rgbd_dataset_freiburg1_360": {
+      "first": 200,
+      "last": 299
+    },
+    "rgbd_dataset_freiburg3_long_office_household": {
+      "first": 740,
+      "last": 839
+    }
+  }
+}
