@@ -6,7 +6,7 @@ This project evaluates PointDiT, a point-map diffusion transformer trained on sy
 
 ![Raw, fused and ground-truth point maps, fr1_360](report/figures/readme/orbit.png)
 
-*Point maps of raw PointDiT, fused PointDiT and the Kinect ground truth. Fusion uses ground-truth camera poses, so it is an upper bound.* [Flythrough video](RELEASE_LINK)
+*Point maps of raw PointDiT, fused PointDiT and the Kinect ground truth. Fusion uses ground-truth camera poses, so it is an upper bound.* [Flythrough video](https://github.com/Sainava/PointDit-In-Motion/releases/tag/v1.0)
 
 ## Main results
 
