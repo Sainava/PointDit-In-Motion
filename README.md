@@ -8,6 +8,12 @@ This project evaluates PointDiT, a point-map diffusion transformer trained on sy
 
 *Point maps of raw PointDiT, fused PointDiT and the Kinect ground truth. Fusion uses ground-truth camera poses, so it is an upper bound.* [Flythrough video](https://github.com/Sainava/PointDit-In-Motion/releases/tag/v1.0)
 
+
+
+![Accumulating world map, fr1_360](report/figures/readme/world_accumulate.gif)
+
+*The map grows as frames arrive, raw PointDiT, fused PointDiT and ground truth side by side, placed in one world frame using ground-truth poses and a scale solved from the frame window. This is an upper bound and not dynamic 4D reconstruction, so moving objects such as the person can ghost.*
+
 ## Main results
 
 | Question | Result |
