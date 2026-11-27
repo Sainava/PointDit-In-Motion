@@ -1,5 +1,20 @@
 # PointDiT in Motion — project guide
 
+> **Scope and staleness (added 2026-11-27).** This guide covers phases 1 to 3 only (pipeline and baseline, per-frame drivers, temporal consistency). It does not cover the fusion forecast, fusion, the compute sweep or rendering. For those see `report/fusion_forecast.md`, `report/fusion_oracle_readout.md`, `report/analysis_compute.md` and `README.md`. The body is kept as written. These items in it are now out of date.
+>
+> | Item in this guide | Current state |
+> |---|---|
+> | "No fusion code, config or test exists yet" (§7) | Fusion is implemented in `src/pim/fusion/` with scripts and tests |
+> | `PROJECT_BRANCH` is `feat/temporal-consistency` | Both notebooks use `main` |
+> | `tests/` has 16 test files and about 190 tests | 27 test files |
+> | `report/data_metrics.md` lists evaluation commit `584cd16` and 4.47 s/frame | It lists `5be07dd`, matching `results/eval/baseline/eval.json` (4.23 s/frame) |
+> | Notebook versions are still `<n>` placeholders | No `<n>` placeholders remain |
+> | Fixture file named `" meta.json"` with a leading space | Tracked as `meta.json` |
+> | `scripts/figures.py` and `peak_memory/metrics/*.py` are empty stray files | Deleted on `docs/audit-readme` |
+> | Sampling at 33 ms, "most CIs exclude no change" | `report/temporal_consistency.md` now says all six do |
+> | "Still to do" phases in §1 and §7 | Fusion, visual deliverables and the compute sweep are done |
+> | Result file table in §2 | Adds `results/forecast/`, `results/fusion/`, `results/fusion_analysis/`, `results/fusion_frame_share/` and `results/sweep/` (with `runs/`) |
+
 A map of everything built so far. It covers how data flows, how each number is computed, why each step exists, and what comes next. Facts come from the code unless a sentence is marked **(context)**, which means it is background I was given and cannot be checked in the repo. Paths are relative to the repo root.
 
 ---
