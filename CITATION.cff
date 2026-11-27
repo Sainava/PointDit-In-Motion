@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "PointDiT in Motion"
+abstract: "Zero-shot evaluation of the PointDiT point-map diffusion transformer on moving-camera TUM RGB-D sequences, with floor-controlled temporal consistency, error persistence, a pre-registered fusion forecast and training-free temporal fusion."
+type: software
+authors:
+  - family-names: "Modak"
+    given-names: "Sainava"
+license: MIT
+version: "1.0"
+date-released: "2026-11-24"
+repository-code: "https://github.com/Sainava/Pointdit-In-Motion"
+keywords:
+  - depth estimation
+  - point maps
+  - diffusion
+  - temporal consistency
+  - TUM RGB-D
